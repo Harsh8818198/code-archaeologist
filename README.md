@@ -158,20 +158,20 @@ Visit [https://code-archaeologist-79z0uewbj-harsh8818198s-projects.vercel.app/]/
 ┌───────────────────────────▼─────────────────────────────────┐
 │                    REST API Server (Node.js)                │
 │                     Port 3001                               │
-│  Routes: /api/excavate, /api/jobs, /api/jobs/:id/report   │
+│  Routes: /api/excavate, /api/jobs, /api/jobs/:id/report     │
 └─────────┬─────────────────────────────────┬─────────────────┘
           │                                 │
           │                                 │
-    ┌─────▼─────┐                    ┌──────▼──────┐
+    ┌─────▼─────┐                     ┌──────▼──────┐
     │  Excavator │                    │   Kestra    │
     │   Agent    │                    │ Orchestrator│
-    │ (TypeScript)│                   │  Port 8080  │
+    │(TypeScript)│                    │  Port 8080  │
     └─────┬──────┘                    └──────┬──────┘
           │                                  │
           │                                  │
     ┌─────▼──────────────────────────────────▼──────┐
     │           Gemini Synthesis Engine              │
-    │         (Google Gemini 1.5 Pro)                │
+    │         (Google Gemini 2.5 Flash)              │
     │         2M token context window                │
     └───────────────────┬────────────────────────────┘
                         │
