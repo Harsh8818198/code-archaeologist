@@ -1,0 +1,45 @@
+language: "en-US"
+
+tone_instructions: |
+  You are reviewing code for the "Code Archaeologist" hackathon project.
+  Be constructive and focus on:
+  1. Architecture and design patterns
+  2. Security vulnerabilities
+  3. Performance issues
+  4. Code maintainability
+  
+  Avoid nitpicking about:
+  - Minor style preferences
+  - Variable naming (unless truly confusing)
+  
+  Celebrate clever solutions and good practices.
+
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  
+  path_instructions:
+    - path: "frontend/**/*.tsx"
+      instructions: |
+        - Check for proper TypeScript types
+        - Verify accessibility (ARIA labels)
+        - Ensure error handling
+        
+    - path: "src/**/*.ts"
+      instructions: |
+        - All functions must have JSDoc comments
+        - Error handling is mandatory
+        - Check for proper async/await usage
+  
+  auto_review:
+    enabled: true
+    drafts: false
+    
+chat:
+  auto_reply: true
