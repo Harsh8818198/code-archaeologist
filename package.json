@@ -1,0 +1,32 @@
+{
+  "name": "code-archaeologist",
+  "version": "0.1.0",
+  "description": "The Temporal Code Archaeologist - Powered by Google Gemini",
+  "type": "module",
+  "scripts": {
+    "dev": "npx tsx watch src/api/server.ts",
+    "start": "npx tsx src/api/server.ts",
+    "excavate": "npx tsx src/agents/excavator.ts",
+    "query": "npx tsx src/agents/query.ts",
+    "test:gemini": "npx tsx src/lib/gemini-client.ts",
+    "orchestrate": "npx tsx src/orchestration/kestra-client.ts",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@octokit/rest": "^20.1.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "simple-git": "^3.25.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
