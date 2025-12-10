@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function ExcavatePage() {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   const router = useRouter();
   const [repoPath, setRepoPath] = useState('');
   const [maxFiles, setMaxFiles] = useState(10);
@@ -17,7 +18,7 @@ export default function ExcavatePage() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/excavate', {
+      const response = await fetch(`${API_URL}/api/excavate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

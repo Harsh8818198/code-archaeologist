@@ -1,32 +1,39 @@
 {
   "name": "code-archaeologist",
   "version": "0.1.0",
-  "description": "The Temporal Code Archaeologist - Powered by Google Gemini",
-  "type": "module",
+  "private": true,
   "scripts": {
-    "dev": "npx tsx watch src/api/server.ts",
-    "start": "npx tsx src/api/server.ts",
-    "excavate": "npx tsx src/agents/excavator.ts",
-    "query": "npx tsx src/agents/query.ts",
-    "generate-training-data": "npx tsx src/lib/generate-training-data.ts",
-    "test:gemini": "tsx test-gemini.ts",
-    "orchestrate": "npx tsx src/orchestration/kestra-client.ts"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "api": "tsx watch server.ts",
+    "api:prod": "tsx server.ts",
+    "excavate": "tsx src/cli.ts",
+    "query": "tsx src/query.ts",
+    "test:gemini": "tsx src/test-gemini.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
-    "@octokit/rest": "^20.1.0",
-    "axios": "^1.7.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.0",
-    "express": "^5.2.1",
-    "simple-git": "^3.25.0",
-    "zod": "^3.23.0"
+    "dotenv": "^17.2.3",
+    "express": "^4.22.1",
+    "next": "14.2.33",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "simple-git": "^3.27.0"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^20.14.0",
-    "tsx": "^4.15.0",
-    "typescript": "^5.5.0"
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.33",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
   }
 }

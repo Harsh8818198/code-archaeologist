@@ -263,7 +263,7 @@ export class ExcavatorAgent {
 
     return {
       totalFiles: sourceFiles.length,
-      analyzedFiles: 0, // Will be updated
+      analyzedFiles: filesToAnalyze.length, // Will be updated
       totalCommits: commits.length,
       totalAuthors: authorMap.size,
       languages,
@@ -575,7 +575,7 @@ export class ExcavatorAgent {
       }
 
       for (const rec of file.analysis.recommendations || []) {
-        const lower = rec.toLowerCase();
+        const lower = String(rec || "").toLowerCase();
         if (
           lower.includes("refactor") ||
           lower.includes("technical debt") ||
