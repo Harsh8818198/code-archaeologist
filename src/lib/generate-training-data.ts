@@ -1,115 +1,55 @@
-/**
- * Training Data Generator for Oumi
- *
- * Generates synthetic training data from git commits
- */
-
-import { geminiEngine } from "./gemini-client.js";
+import { GeminiSynthesisEngine } from "./gemini-client.js";
 import { simpleGit } from "simple-git";
 import * as fs from "fs";
-import * as path from "path";
+import { config } from "dotenv";
 
-interface TrainingExample {
-  messages: Array<{
-    role: "system" | "user" | "assistant";
-    content: string;
-  }>;
-}
-
-export async function generateTrainingData(
-  repoPath: string,
-  numExamples: number = 100
-): Promise<void> {
-  console.log("📚 Generating training data from repository...\n");
-
-  const git = simpleGit(repoPath);
-  const log = await git.log({ maxCount: numExamples * 2 });
-
-  const trainingExamples: TrainingExample[] = [];
-
-  for (let i = 0; i < Math.min(numExamples, log.all.length); i++) {
-    const commit = log.all[i];
-
-    console.log(
-      `Processing ${i + 1}/${numExamples}: ${commit.hash.slice(0, 7)}`
-    );
-
-    // Get diff
-    let diff = "";
-    try {
-      diff = await git.diff([`${commit.hash}^`, commit.hash]);
-      diff = diff.slice(0, 1000); // Limit size
-    } catch {
-      continue;
-    }
-
-    // Generate explanation using Gemini
-    const prompt = `Analyze this git commit and explain the business context:
-
-Commit Message: ${commit.message}
-Author: ${commit.author_name}
-Date: ${commit.date}
-
-Diff:
-${diff}
-
-Provide a 2-3 sentence explanation of why this change was made from a business perspective.`;
-
-    try {
-      const response = await geminiEngine.chat(prompt, "");
-
-      trainingExamples.push({
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a code archaeologist. Explain why code changes were made.",
-          },
-          {
-            role: "user",
-            content: `Commit: ${commit.message}\n\nDiff:\n${diff}`,
-          },
-          {
-            role: "assistant",
-            content: response,
-          },
-        ],
-      });
-
-      // Rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    } catch (error) {
-      console.log(`  ⚠️  Skipped due to error`);
-    }
-  }
-
-  // Save as JSONL
-  const jsonl = trainingExamples.map((ex) => JSON.stringify(ex)).join("\n");
-  const outputPath = path.join(
-    process.cwd(),
-    "oumi-training",
-    "training-data.jsonl"
-  );
-
-  fs.writeFileSync(outputPath, jsonl);
-
-  console.log(`\n✅ Generated ${trainingExamples.length} training examples`);
-  console.log(`📁 Saved to: ${outputPath}`);
-}
-
-// ============================
-// CLI
-// ============================
+config();
 
 async function main() {
   const repoPath = process.argv[2] || process.cwd();
-  const numExamples = parseInt(process.argv[3] || "50");
+  const outputPath = "./training-data.jsonl";
 
-  await geminiEngine.initialize();
-  await generateTrainingData(repoPath, numExamples);
+  console.log("📚 Generating Training Data");
+  console.log("═".repeat(40));
+
+  const git = simpleGit(repoPath);
+  const gemini = new GeminiSynthesisEngine();
+  await gemini.initialize();
+
+  const log = await git.log({ maxCount: 20 });
+  const commits = log.all;
+
+  console.log(`Found ${commits.length} commits\n`);
+
+  const trainingData: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+
+  for (let i = 0; i < commits.length; i++) {
+    const c = commits[i];
+    
+    try {
+      const prompt = `Explain the business context for this commit: "${c.message}" by ${c.author_name}. Give a 2-3 sentence explanation.`;
+      const response = await gemini.generate(prompt);
+      
+      trainingData.push({
+        messages: [
+          { role: "user", content: `Explain the business context for this code change: ${c.message}` },
+          { role: "assistant", content: response.trim() }
+        ]
+      });
+      
+      console.log(`Processed commit ${i + 1}/${commits.length}`);
+    } catch (e) {
+      console.log(`Commit ${i + 1} failed, skipping`);
+    }
+
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  const jsonl = trainingData.map(d => JSON.stringify(d)).join("\n");
+  fs.writeFileSync(outputPath, jsonl);
+
+  console.log(`\n✅ Generated ${trainingData.length} examples`);
+  console.log(`📄 Saved to: ${outputPath}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
-}
-
+main().catch(console.error);

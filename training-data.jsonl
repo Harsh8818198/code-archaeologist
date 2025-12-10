@@ -1,0 +1,6 @@
+{"instruction":"Explain the business context for this code change","input":"feat: Complete Infinity Stones integration","output":"This commit integrates all six components (Cline, Kestra, Oumi, Together AI, Vercel, CodeRabbit) into a unified code archaeology system."}
+{"instruction":"Explain the business context for this code change","input":"Day 2 Enhanced Excavator","output":"Enhanced the excavator with deep git analysis and code metrics for better archaeological insights."}
+{"instruction":"Explain the business context for this code change","input":"Initial commit","output":"Established project foundation with basic structure and dependencies."}
+{"instruction":"Explain the business context for this code change","input":"Add Gemini integration","output":"Added Google Gemini AI as the synthesis engine for cost-effective analysis."}
+{"instruction":"Explain the business context for this code change","input":"Fix rate limiting","output":"Implemented retry logic to handle API rate limits gracefully."}
+{"instruction":"Explain the business context for this code change","input":"Add knowledge graph","output":"Added D3.js visualization showing code relationships."}
