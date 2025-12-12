@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
 interface JobStatus {
   id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -57,7 +55,7 @@ export default function ResultsPage() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/jobs/${jobId}`);
+        const response = await fetch(`http://localhost:3001/api/jobs/${jobId}`);
         const data = await response.json();
         
         if (data.success) {
@@ -65,7 +63,7 @@ export default function ResultsPage() {
           
           // If completed, fetch report
           if (data.data.status === 'completed') {
-            const reportResponse = await fetch(`${API_URL}/api/jobs/${jobId}/report`);
+            const reportResponse = await fetch(`http://localhost:3001/api/jobs/${jobId}/report`);
             const reportData = await reportResponse.json();
             
             if (reportData.success) {
