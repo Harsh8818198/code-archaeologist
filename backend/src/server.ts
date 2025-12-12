@@ -11,6 +11,8 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://temporal-archaeologist.vercel.app',
+    'https://code-archaeologist-frontend-avtff7ced-harsh8818198s-projects.vercel.app',
+    'https://code-archaeologist-frontend.vercel.app',
     process.env.FRONTEND_URL || '',
   ].filter(Boolean),
   credentials: true,
