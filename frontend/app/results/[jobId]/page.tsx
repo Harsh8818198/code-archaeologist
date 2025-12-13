@@ -40,7 +40,7 @@ export default function ResultsPage() {
     const fetchStatus = async () => {
       try {
         // Use the correct endpoint: /api/excavate/:jobId
-        const response = await fetch(`${API_URL}/api/excavate/${jobId}`);
+        const response = await fetch(`${API_URL}/api/jobs/${jobId}`);
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);

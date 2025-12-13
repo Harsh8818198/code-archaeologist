@@ -1,3 +1,4 @@
+import "dotenv/config";
 // backend/src/server.ts
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -349,7 +350,7 @@ app.use((req: Request, res: Response) => {
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 Temporal Archaeologist API running on port ${PORT}`);
+  console.log(`🚀 Code Archaeologist API running on port ${PORT}`);
 });
 
 export default app;

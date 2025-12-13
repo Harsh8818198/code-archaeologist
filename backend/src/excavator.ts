@@ -1,14 +1,14 @@
 // backend/src/excavator.ts
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { 
-  ExcavationResult, 
-  ArchaeologicalLayer, 
+import {
+  ExcavationResult,
+  ArchaeologicalLayer,
   FossilizedPattern,
   KnowledgeGap,
   Recommendation,
   GraphData,
   GraphNode,
-  GraphEdge 
+  GraphEdge
 } from './lib/redis';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -90,8 +90,8 @@ export async function excavateRepository(
 }
 
 async function fetchCommits(
-  owner: string, 
-  repo: string, 
+  owner: string,
+  repo: string,
   maxCommits: number
 ): Promise<GitHubCommit[]> {
   const commits: GitHubCommit[] = [];
@@ -118,7 +118,7 @@ async function fetchCommits(
       throw new Error(`GitHub API error: ${response.statusText}`);
     }
 
-    const data: GitHubCommit[] = await response.json();
+    const data = await response.json() as GitHubCommit[];
     if (data.length === 0) break;
 
     commits.push(...data);
@@ -139,7 +139,7 @@ async function analyzeCommitsWithGemini(
   knowledgeGaps: KnowledgeGap[];
   recommendations: Recommendation[];
 }> {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
   // Prepare commit summary for analysis
   const commitSummary = commits.slice(0, 50).map(c => ({
@@ -203,7 +203,7 @@ Be specific and actionable. Base your analysis on actual patterns you see in the
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    
+
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -211,7 +211,7 @@ Be specific and actionable. Base your analysis on actual patterns you see in the
     }
 
     const analysis = JSON.parse(jsonMatch[0]);
-    
+
     return {
       fossilizedPatterns: analysis.fossilizedPatterns || [],
       knowledgeGaps: analysis.knowledgeGaps || [],
@@ -254,16 +254,16 @@ function generateArchaeologicalLayers(commits: GitHubCommit[]): ArchaeologicalLa
     const contributors = [...new Set(layerCommits.map(c => c.commit.author.name))];
     const startDate = layerCommits[0].commit.author.date;
     const endDate = layerCommits[layerCommits.length - 1].commit.author.date;
-    
+
     // Determine layer name based on time
     const layerIndex = Math.floor(i / layerSize);
     const layerNames = ['Foundation', 'Early Development', 'Growth', 'Maturation', 'Recent'];
-    
+
     // Calculate sentiment based on commit frequency and patterns
     const daySpan = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
     const commitsPerDay = layerCommits.length / Math.max(daySpan, 1);
-    const sentiment: 'active' | 'stable' | 'declining' = 
-      commitsPerDay > 1 ? 'active' : 
+    const sentiment: 'active' | 'stable' | 'declining' =
+      commitsPerDay > 1 ? 'active' :
       commitsPerDay > 0.1 ? 'stable' : 'declining';
 
     layers.push({
@@ -282,7 +282,7 @@ function generateArchaeologicalLayers(commits: GitHubCommit[]): ArchaeologicalLa
 
 function extractKeyChanges(commits: GitHubCommit[]): string[] {
   const changes: string[] = [];
-  
+
   for (const commit of commits.slice(0, 10)) {
     const message = commit.commit.message.split('\n')[0];
     if (message.length > 10 && !message.toLowerCase().includes('merge')) {
@@ -290,7 +290,7 @@ function extractKeyChanges(commits: GitHubCommit[]): string[] {
     }
     if (changes.length >= 5) break;
   }
-  
+
   return changes;
 }
 
@@ -320,7 +320,7 @@ function buildKnowledgeGraph(
       id: layerId,
       type: 'file', // Using file type for visualization
       label: layer.name,
-      metadata: { 
+      metadata: {
         commits: layer.commits,
         sentiment: layer.sentiment,
         dateRange: layer.dateRange,
@@ -331,11 +331,11 @@ function buildKnowledgeGraph(
 
   // Add author nodes and connect to layers
   const authorsByLayer: Map<string, Set<string>> = new Map();
-  
+
   for (const commit of commits) {
     const author = commit.commit.author.name;
     const authorId = `author:${author.replace(/\s+/g, '-').toLowerCase()}`;
-    
+
     if (!nodeIds.has(authorId)) {
       nodes.push({
         id: authorId,
@@ -351,11 +351,11 @@ function buildKnowledgeGraph(
       const commitDate = new Date(commit.commit.author.date);
       const layerStart = new Date(layer.dateRange.start);
       const layerEnd = new Date(layer.dateRange.end);
-      
+
       if (commitDate >= layerStart && commitDate <= layerEnd) {
         const layerId = `layer:${layer.id}`;
         const edgeId = `${authorId}->${layerId}`;
-        
+
         if (!authorsByLayer.has(edgeId)) {
           authorsByLayer.set(edgeId, new Set());
           edges.push({
@@ -391,7 +391,7 @@ function buildKnowledgeGraph(
         source: patternId,
         target: `layer:${layers[0].id}`,
         type: 'related-to',
-        weight: pattern.riskLevel === 'critical' ? 3 : 
+        weight: pattern.riskLevel === 'critical' ? 3 :
                pattern.riskLevel === 'high' ? 2 : 1,
       });
     }
