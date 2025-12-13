@@ -13,10 +13,10 @@ try {
     });
     console.log('✅ Redis connected');
   } else {
-    console.log('⚠️  Redis disabled - using in-memory storage');
+    console.log('⚠️ Redis disabled - using in-memory storage');
   }
 } catch (error) {
-  console.error('⚠️  Redis initialization failed, using in-memory storage');
+  console.error('⚠️ Redis initialization failed, using in-memory storage');
   redis = null;
 }
 
@@ -29,208 +29,195 @@ export interface ExcavationJob {
   repoUrl: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
-  currentStep: string;
   result?: ExcavationResult;
+  startedAt: Date;
+  completedAt?: Date;
   error?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface ExcavationResult {
-  repoUrl: string;
-  analyzedAt: string;
-  totalCommits: number;
-  totalFiles: number;
-  archaeologicalLayers: ArchaeologicalLayer[];
-  fossilizedPatterns: FossilizedPattern[];
-  knowledgeGaps: KnowledgeGap[];
-  recommendations: Recommendation[];
-  graphData?: GraphData;
+  repositoryInfo: {
+    name: string;
+    owner: string;
+    description: string;
+    language: string;
+    stars: number;
+    forks: number;
+    lastUpdated: string;
+  };
+  summary: string;
+  keyFindings: string[];
+  technicalDebt: string[];
+  recommendations: string[];
+  riskAssessment: {
+    level: 'low' | 'medium' | 'high';
+    factors: string[];
+  };
+  dependencies: {
+    name: string;
+    version: string;
+    risk: 'low' | 'medium' | 'high';
+    reasoning: string;
+  }[];
 }
 
-export interface ArchaeologicalLayer {
+export interface Activity {
   id: string;
-  name: string;
-  dateRange: { start: string; end: string };
-  commits: number;
-  keyChanges: string[];
-  contributors: string[];
-  sentiment: 'active' | 'stable' | 'declining';
+  jobId: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+  message: string;
+  timestamp: Date;
+  details?: any;
 }
 
-export interface FossilizedPattern {
+export interface Clarification {
   id: string;
-  type: 'dead-code' | 'legacy-pattern' | 'abandoned-feature' | 'cargo-cult';
-  location: string;
-  description: string;
-  lastTouched: string;
-  riskLevel: 'low' | 'medium' | 'high' | 'critical';
-  suggestedAction: string;
+  jobId: string;
+  question: string;
+  type: 'permission' | 'configuration' | 'analysis';
+  priority: 'low' | 'medium' | 'high';
+  timestamp: Date;
+  resolved: boolean;
+  response?: string;
 }
 
-export interface KnowledgeGap {
-  id: string;
-  file: string;
-  type: 'missing-docs' | 'unclear-purpose' | 'tribal-knowledge' | 'bus-factor';
-  severity: 'low' | 'medium' | 'high';
-  description: string;
-  affectedAreas: string[];
-}
-
-export interface Recommendation {
-  id: string;
-  priority: number;
-  category: 'documentation' | 'refactoring' | 'testing' | 'cleanup';
-  title: string;
-  description: string;
-  estimatedEffort: string;
-  impact: 'low' | 'medium' | 'high';
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
-
-export interface GraphNode {
-  id: string;
-  type: 'file' | 'author' | 'pattern';
-  label: string;
-  metadata?: any;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  type: string;
-  weight?: number;
-}
-
-// Job Store
+// Storage functions
 export const jobStore = {
-  // Overloaded create method - accepts repoUrl string or full job object
-  async create(jobOrRepoUrl: string | ExcavationJob): Promise<ExcavationJob> {
-    let job: ExcavationJob;
+  async create(job: Omit<ExcavationJob, 'id'>): Promise<string> {
+    const id = randomUUID();
+    const fullJob = { ...job, id };
     
-    if (typeof jobOrRepoUrl === 'string') {
-      // Create new job from repoUrl
-      job = {
-        id: randomUUID(),
-        repoUrl: jobOrRepoUrl,
-        status: 'pending',
-        progress: 0,
-        currentStep: 'Initializing...',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    } else {
-      // Use provided job object
-      job = jobOrRepoUrl;
-    }
-
     if (redis) {
-      await redis.set(`job:${job.id}`, JSON.stringify(job));
+      await redis.hset(`job:${id}`, fullJob);
+      await redis.expire(`job:${id}`, 86400); // 24h expiry
     } else {
-      memoryStore.set(`job:${job.id}`, job);
+      memoryStore.set(`job:${id}`, fullJob);
     }
     
-    return job;
+    return id;
   },
 
   async get(id: string): Promise<ExcavationJob | null> {
     if (redis) {
-      const data = await redis.get(`job:${id}`);
-      return data ? (typeof data === 'string' ? JSON.parse(data) : data) : null;
+      const job = await redis.hgetall(`job:${id}`);
+      return Object.keys(job).length > 0 ? job as ExcavationJob : null;
     } else {
       return memoryStore.get(`job:${id}`) || null;
     }
   },
 
   async update(id: string, updates: Partial<ExcavationJob>): Promise<void> {
-    const job = await this.get(id);
-    if (job) {
-      const updated = { ...job, ...updates, updatedAt: new Date().toISOString() };
-      if (redis) {
-        await redis.set(`job:${id}`, JSON.stringify(updated));
-      } else {
-        memoryStore.set(`job:${id}`, updated);
+    if (redis) {
+      await redis.hset(`job:${id}`, updates);
+    } else {
+      const existing = memoryStore.get(`job:${id}`);
+      if (existing) {
+        memoryStore.set(`job:${id}`, { ...existing, ...updates });
       }
     }
   },
 
-  async setResult(id: string, result: ExcavationResult): Promise<void> {
-    await this.update(id, {
-      result,
-      status: 'completed',
-      progress: 100,
-      currentStep: 'Completed',
-    });
-  },
-
-  async delete(id: string): Promise<void> {
+  async list(): Promise<ExcavationJob[]> {
     if (redis) {
-      await redis.del(`job:${id}`);
+      const keys = await redis.keys('job:*');
+      const jobs = await Promise.all(
+        keys.map(async (key) => {
+          const job = await redis!.hgetall(key);
+          return Object.keys(job).length > 0 ? job as ExcavationJob : null;
+        })
+      );
+      return jobs.filter(Boolean) as ExcavationJob[];
     } else {
-      memoryStore.delete(`job:${id}`);
+      return Array.from(memoryStore.values()).filter(v => v.id);
     }
   },
 };
 
-// Activity Store
 export const activityStore = {
-  async add(activity: any): Promise<void> {
-    const id = `activity:${Date.now()}:${Math.random()}`;
+  async add(activity: Omit<Activity, 'id'>): Promise<void> {
+    const id = randomUUID();
+    const fullActivity = { ...activity, id };
+    
     if (redis) {
-      await redis.set(id, JSON.stringify(activity));
+      await redis.lpush(`activities:${activity.jobId}`, JSON.stringify(fullActivity));
+      await redis.expire(`activities:${activity.jobId}`, 86400);
     } else {
-      memoryStore.set(id, activity);
+      const key = `activities:${activity.jobId}`;
+      const activities = memoryStore.get(key) || [];
+      activities.unshift(fullActivity);
+      memoryStore.set(key, activities);
     }
   },
-  
-  async create(activity: any): Promise<void> {
-    return this.add(activity);
-  },
-  
-  async getRecent(limit: number = 10): Promise<any[]> {
+
+  async getForJob(jobId: string): Promise<Activity[]> {
     if (redis) {
-      const keys = await redis.keys('activity:*');
-      const activities = [];
-      for (const key of keys.slice(0, limit)) {
-        const data = await redis.get(key);
-        if (data) activities.push(typeof data === 'string' ? JSON.parse(data) : data);
-      }
-      return activities;
+      const activities = await redis.lrange(`activities:${jobId}`, 0, -1);
+      return activities.map(a => JSON.parse(a));
     } else {
-      const activities = [];
-      for (const [key, value] of memoryStore.entries()) {
-        if (key.startsWith('activity:')) {
-          activities.push(value);
-        }
-      }
-      return activities.slice(0, limit);
+      return memoryStore.get(`activities:${jobId}`) || [];
     }
   },
 };
 
-// Clarification Store
 export const clarificationStore = {
-  async create(clarification: any): Promise<void> {
-    const id = clarification.id || `clarification:${Date.now()}`;
+  async add(clarification: Omit<Clarification, 'id'>): Promise<string> {
+    const id = randomUUID();
+    const fullClarification = { ...clarification, id };
+    
     if (redis) {
-      await redis.set(id, JSON.stringify(clarification));
+      await redis.hset(`clarification:${id}`, fullClarification);
+      await redis.lpush(`clarifications:${clarification.jobId}`, id);
+      await redis.expire(`clarification:${id}`, 86400);
+      await redis.expire(`clarifications:${clarification.jobId}`, 86400);
     } else {
-      memoryStore.set(id, clarification);
+      memoryStore.set(`clarification:${id}`, fullClarification);
+      const key = `clarifications:${clarification.jobId}`;
+      const clarifications = memoryStore.get(key) || [];
+      clarifications.push(id);
+      memoryStore.set(key, clarifications);
+    }
+    
+    return id;
+  },
+
+  async get(id: string): Promise<Clarification | null> {
+    if (redis) {
+      const clarification = await redis.hgetall(`clarification:${id}`);
+      return Object.keys(clarification).length > 0 ? clarification as Clarification : null;
+    } else {
+      return memoryStore.get(`clarification:${id}`) || null;
     }
   },
-  
-  async get(id: string): Promise<any | null> {
+
+  async getForJob(jobId: string): Promise<Clarification[]> {
     if (redis) {
-      const data = await redis.get(id);
-      return data ? (typeof data === 'string' ? JSON.parse(data) : data) : null;
+      const ids = await redis.lrange(`clarifications:${jobId}`, 0, -1);
+      const clarifications = await Promise.all(
+        ids.map(async (id) => {
+          const clarification = await redis!.hgetall(`clarification:${id}`);
+          return Object.keys(clarification).length > 0 ? clarification as Clarification : null;
+        })
+      );
+      return clarifications.filter(Boolean) as Clarification[];
     } else {
-      return memoryStore.get(id) || null;
+      const key = `clarifications:${jobId}`;
+      const ids = memoryStore.get(key) || [];
+      return ids.map((id: string) => memoryStore.get(`clarification:${id}`)).filter(Boolean);
+    }
+  },
+
+  async resolve(id: string, response: string): Promise<void> {
+    if (redis) {
+      await redis.hset(`clarification:${id}`, {
+        resolved: true,
+        response,
+      });
+    } else {
+      const clarification = memoryStore.get(`clarification:${id}`);
+      if (clarification) {
+        clarification.resolved = true;
+        clarification.response = response;
+      }
     }
   },
 };
-
-export default redis;
