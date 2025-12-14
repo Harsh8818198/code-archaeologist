@@ -78,29 +78,14 @@ export async function excavateRepository(
 
   return {
     repoUrl,
-    repositoryInfo: {
-      name: repo,
-      owner: owner,
-      description: '',
-      language: '',
-      stars: 0,
-      forks: 0,
-      lastUpdated: new Date().toISOString()
-    },
-    summary: `Analyzed ${commits.length} commits from ${owner}/${repo}`,
-    keyFindings: layers.map(l => `${l.name}: ${l.commits.length} commits`),
-    technicalDebt: patterns.filter(p => p.riskLevel === 'high' || p.riskLevel === 'critical').map(p => p.description),
-    recommendations: recommendations,
-    riskAssessment: {
-      level: patterns.some(p => p.riskLevel === 'critical') ? 'high' : 
-             patterns.some(p => p.riskLevel === 'high') ? 'medium' : 'low',
-      factors: patterns.map(p => p.type)
-    },
-    dependencies: [],
-    layers: layers,
-    patterns: patterns,
+    analyzedAt: new Date().toISOString(),
+    totalCommits: commits.length,
+    totalFiles: countUniqueFiles(commits),
+    archaeologicalLayers: layers,
+    fossilizedPatterns: patterns,
     knowledgeGaps: gaps,
-    graph: graphData
+    recommendations,
+    graphData,
   };
 }
 
@@ -203,10 +188,12 @@ Return your analysis as JSON in this exact format:
   "recommendations": [
     {
       "id": "rec-1",
-      "priority": "high",
-      "type": "documentation",
+      "priority": 1,
       "category": "documentation|refactoring|testing|cleanup",
-      "description": "detailed description"
+      "title": "short title",
+      "description": "detailed description",
+      "estimatedEffort": "1 hour|1 day|1 week|1 month",
+      "impact": "low|medium|high"
     }
   ]
 }
@@ -238,10 +225,12 @@ Be specific and actionable. Base your analysis on actual patterns you see in the
       knowledgeGaps: [],
       recommendations: [{
         id: 'rec-1',
-        type: 'documentation',
+        priority: 1,
         category: 'documentation',
+        title: 'Add repository documentation',
         description: 'Could not perform full analysis. Consider adding a comprehensive README.',
-        priority: 'high',
+        estimatedEffort: '1 day',
+        impact: 'high',
       }],
     };
   }
@@ -281,10 +270,9 @@ function generateArchaeologicalLayers(commits: GitHubCommit[]): ArchaeologicalLa
       id: `layer-${layerIndex}`,
       name: layerNames[layerIndex] || `Layer ${layerIndex + 1}`,
       dateRange: { start: startDate, end: endDate },
-      depth: layerIndex,
-      timeRange: `${startDate} to ${endDate}`,
-      commits: layerCommits,
-      patterns: [],
+      commits: layerCommits.length,
+      keyChanges: extractKeyChanges(layerCommits),
+      contributors,
       sentiment,
     });
   }
@@ -330,10 +318,10 @@ function buildKnowledgeGraph(
     const layerId = `layer:${layer.id}`;
     nodes.push({
       id: layerId,
-      type: 'file',
-      label: layer.name || `Layer ${layer.depth}`,
+      type: 'file', // Using file type for visualization
+      label: layer.name,
       metadata: {
-        commits: layer.commits.length,
+        commits: layer.commits,
         sentiment: layer.sentiment,
         dateRange: layer.dateRange,
       },
@@ -360,8 +348,6 @@ function buildKnowledgeGraph(
 
     // Find which layer this commit belongs to
     for (const layer of layers) {
-      if (!layer.dateRange) continue;
-      
       const commitDate = new Date(commit.commit.author.date);
       const layerStart = new Date(layer.dateRange.start);
       const layerEnd = new Date(layer.dateRange.end);
@@ -400,7 +386,7 @@ function buildKnowledgeGraph(
     nodeIds.add(patternId);
 
     // Connect patterns to the most recent layer
-    if (layers.length > 0 && layers[0].id) {
+    if (layers.length > 0) {
       edges.push({
         source: patternId,
         target: `layer:${layers[0].id}`,

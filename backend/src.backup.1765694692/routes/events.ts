@@ -3,6 +3,7 @@ import { redisStore } from '../services/redis';
 
 const router = Router();
 
+// Get recent events
 router.get('/recent', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 20;

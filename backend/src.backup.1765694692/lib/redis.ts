@@ -36,7 +36,6 @@ export interface ExcavationJob {
 }
 
 export interface ExcavationResult {
-  repoUrl?: string;
   repositoryInfo: {
     name: string;
     owner: string;
@@ -49,7 +48,7 @@ export interface ExcavationResult {
   summary: string;
   keyFindings: string[];
   technicalDebt: string[];
-  recommendations: Recommendation[];
+  recommendations: string[];
   riskAssessment: {
     level: 'low' | 'medium' | 'high';
     factors: string[];
@@ -60,10 +59,6 @@ export interface ExcavationResult {
     risk: 'low' | 'medium' | 'high';
     reasoning: string;
   }[];
-  layers?: ArchaeologicalLayer[];
-  patterns?: FossilizedPattern[];
-  knowledgeGaps?: KnowledgeGap[];
-  graph?: GraphData;
 }
 
 export interface Activity {
@@ -86,85 +81,26 @@ export interface Clarification {
   response?: string;
 }
 
-export interface ArchaeologicalLayer {
-  id?: string;
-  name?: string;
-  depth: number;
-  timeRange: string;
-  dateRange?: {
-    start: string;
-    end: string;
-  };
-  commits: any[];
-  patterns: FossilizedPattern[];
-  sentiment?: string;
-}
-
-export interface FossilizedPattern {
-  id?: string;
-  type: string;
-  description: string;
-  occurrences: number;
-  firstSeen: string;
-  lastSeen: string;
-  riskLevel?: string;
-  location?: string;
-}
-
-export interface KnowledgeGap {
-  id: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high';
-  affectedFiles: string[];
-}
-
-export interface Recommendation {
-  id?: string;
-  type: string;
-  category?: string;
-  description: string;
-  priority: number | 'low' | 'medium' | 'high';
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
-
-export interface GraphNode {
-  id: string;
-  label: string;
-  type: string;
-  metadata?: any;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  type: string;
-  weight?: number;
-}
-
 // Storage functions
 export const jobStore = {
   async create(job: Omit<ExcavationJob, 'id'>): Promise<string> {
     const id = randomUUID();
     const fullJob = { ...job, id };
-
+    
     if (redis) {
       await redis.hset(`job:${id}`, fullJob);
       await redis.expire(`job:${id}`, 86400); // 24h expiry
     } else {
       memoryStore.set(`job:${id}`, fullJob);
     }
-
+    
     return id;
   },
 
   async get(id: string): Promise<ExcavationJob | null> {
     if (redis) {
       const job = await redis.hgetall(`job:${id}`);
-      return job && Object.keys(job).length > 0 ? job as unknown as ExcavationJob : null;
+      return Object.keys(job).length > 0 ? job as ExcavationJob : null;
     } else {
       return memoryStore.get(`job:${id}`) || null;
     }
@@ -187,7 +123,7 @@ export const jobStore = {
       const jobs = await Promise.all(
         keys.map(async (key) => {
           const job = await redis!.hgetall(key);
-          return job && Object.keys(job).length > 0 ? job as unknown as ExcavationJob : null;
+          return Object.keys(job).length > 0 ? job as ExcavationJob : null;
         })
       );
       return jobs.filter(Boolean) as ExcavationJob[];
@@ -201,7 +137,7 @@ export const activityStore = {
   async add(activity: Omit<Activity, 'id'>): Promise<void> {
     const id = randomUUID();
     const fullActivity = { ...activity, id };
-
+    
     if (redis) {
       await redis.lpush(`activities:${activity.jobId}`, JSON.stringify(fullActivity));
       await redis.expire(`activities:${activity.jobId}`, 86400);
@@ -227,7 +163,7 @@ export const clarificationStore = {
   async add(clarification: Omit<Clarification, 'id'>): Promise<string> {
     const id = randomUUID();
     const fullClarification = { ...clarification, id };
-
+    
     if (redis) {
       await redis.hset(`clarification:${id}`, fullClarification);
       await redis.lpush(`clarifications:${clarification.jobId}`, id);
@@ -240,14 +176,14 @@ export const clarificationStore = {
       clarifications.push(id);
       memoryStore.set(key, clarifications);
     }
-
+    
     return id;
   },
 
   async get(id: string): Promise<Clarification | null> {
     if (redis) {
       const clarification = await redis.hgetall(`clarification:${id}`);
-      return clarification && Object.keys(clarification).length > 0 ? clarification as unknown as Clarification : null;
+      return Object.keys(clarification).length > 0 ? clarification as Clarification : null;
     } else {
       return memoryStore.get(`clarification:${id}`) || null;
     }
@@ -259,7 +195,7 @@ export const clarificationStore = {
       const clarifications = await Promise.all(
         ids.map(async (id) => {
           const clarification = await redis!.hgetall(`clarification:${id}`);
-          return clarification && Object.keys(clarification).length > 0 ? clarification as unknown as Clarification : null;
+          return Object.keys(clarification).length > 0 ? clarification as Clarification : null;
         })
       );
       return clarifications.filter(Boolean) as Clarification[];
@@ -285,4 +221,3 @@ export const clarificationStore = {
     }
   },
 };
-
