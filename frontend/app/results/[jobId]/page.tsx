@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import KnowledgeGraph from '../../components/KnowledgeGraph';
+import KnowledgeGraph from '@/components/KnowledgeGraph';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
