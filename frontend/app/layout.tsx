@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Code Archaeologist - AI-Powered Repository Analysis",
   description: "Uncover the 'Why' behind every line of code with AI-powered analysis",
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
