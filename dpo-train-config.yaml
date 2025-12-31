@@ -1,30 +1,31 @@
 model:
-  model_name: "Qwen/Qwen2.5-1.5B-Instruct"
+  model_name: "Qwen/Qwen2.5-0.5B-Instruct"
   trust_remote_code: true
   torch_dtype_str: "bfloat16"
-  model_max_length: 2048
+  model_max_length: 512
 
 data:
   train:
     datasets:
-      - dataset_name: "text_sft_jsonl"
-        dataset_path: "./oumi-training/dpo-data.jsonl"
+      - dataset_name: "mlabonne/orpo-dpo-mix-40k"
+        sample_count: 10
         split: "train"
 
 training:
   trainer_type: "TRL_DPO"
   output_dir: "./oumi-training/output/archaeologist-dpo-model"
   num_train_epochs: 1
+  max_steps: 5
   learning_rate: 5.0e-5
   use_peft: true
   per_device_train_batch_size: 1
-  gradient_accumulation_steps: 2
+  gradient_accumulation_steps: 1
   enable_gradient_checkpointing: true
   logging_steps: 1
-  save_steps: 50
-  max_steps: 10
+  save_steps: 10
+  eval_strategy: "no"
 
 peft:
-  lora_r: 8
+  lora_r: 4
   lora_alpha: 8
   lora_dropout: 0.1
