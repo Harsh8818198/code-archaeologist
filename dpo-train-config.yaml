@@ -6,44 +6,25 @@ model:
 
 data:
   train:
-    collator_name: "dpo"
-    prompt_col: "prompt"
-    chosen_col: "chosen"
-    rejected_col: "rejected"
     datasets:
-      - dataset_name: "text_preference_jsonl"
-        dataset_path: "/home/shank/projects/code-archaeologist/dpo-training-data.jsonl"
+      - dataset_name: "text_sft_jsonl"
+        dataset_path: "./oumi-training/dpo-data.jsonl"
         split: "train"
-        shuffle: true
-        seed: 42
 
 training:
-  trainer_type: "TRL_DPO"  # ← Reinforcement Learning via Direct Preference Optimization
+  trainer_type: "TRL_DPO"
   output_dir: "./oumi-training/output/archaeologist-dpo-model"
-  num_train_epochs: 3
+  num_train_epochs: 1
   learning_rate: 5.0e-5
-  beta: 0.1  # DPO temperature parameter
   use_peft: true
-
-  # Memory optimization for 6GB VRAM
   per_device_train_batch_size: 1
-  gradient_accumulation_steps: 4
+  gradient_accumulation_steps: 2
   enable_gradient_checkpointing: true
-  gradient_checkpointing_kwargs:
-    use_reentrant: false
-
-  logging_steps: 5
-  save_steps: 100
-  eval_strategy: "no"
-  dataloader_num_workers: "auto"
+  logging_steps: 1
+  save_steps: 50
+  max_steps: 10
 
 peft:
-  lora_r: 32
-  lora_alpha: 32
+  lora_r: 8
+  lora_alpha: 8
   lora_dropout: 0.1
-  q_lora: true
-  q_lora_bits: 4
-  bnb_4bit_quant_type: "nf4"
-  use_bnb_nested_quant: true
-  bnb_4bit_compute_dtype: "bfloat16"
-  peft_save_mode: "ADAPTER_ONLY"
