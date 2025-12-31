@@ -1,0 +1,67 @@
+# kestra/flows/analyze-commits.yaml
+id: analyze-commits
+namespace: code-archaeologist
+description: Analyze commits in detail
+
+inputs:
+  - id: repository
+    type: STRING
+    required: true
+  - id: commits
+    type: JSON
+    required: true
+
+tasks:
+  - id: analyze-each-commit
+    type: io.kestra.plugin.core.flow.EachSequential
+    value: "{{inputs.commits}}"
+    tasks:
+      - id: analyze-commit
+        type: io.kestra.plugin.scripts.python.Script
+        containerImage: python:3.11-slim
+        beforeCommands:
+          - pip install google-generativeai requests
+        env:
+          GEMINI_API_KEY: "{{secret('GEMINI_API_KEY')}}"
+          GITHUB_TOKEN: "{{secret('GITHUB_TOKEN')}}"
+        script: |
+          import os
+          import json
+          import requests
+          import google.generativeai as genai
+
+          commit = json.loads('''{{taskrun.value | json}}''')
+          repo = "{{inputs.repository}}"
+
+          headers = {
+              'Authorization': f"token {os.environ['GITHUB_TOKEN']}",
+              'Accept': 'application/vnd.github.v3+json'
+          }
+
+          commit_url = f"https://api.github.com/repos/{repo}/commits/{commit['id']}"
+          response = requests.get(commit_url, headers=headers)
+          commit_details = response.json()
+
+          files_changed = commit_details.get('files', [])
+
+          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          model = genai.GenerativeModel('gemini-2.0-flash')
+
+          prompt = f"""Analyze this git commit for archaeological insights:
+
+          Repository: {repo}
+          Commit: {commit['id'][:7]}
+          Message: {commit['message']}
+          Author: {commit['author']['name']}
+          Files changed: {[f['filename'] for f in files_changed[:10]]}
+
+          Provide analysis as JSON:
+          {{"summary": "...", "business_context": "...", "risk": "low|medium|high"}}
+          """
+
+          result = model.generate_content(prompt)
+          print(f"ANALYSIS_RESULT={result.text}")
+
+  - id: notify-completion
+    type: io.kestra.plugin.core.log.Log
+    message: "✅ Analyzed {{inputs.commits | length}} commits"

@@ -1,0 +1,128 @@
+# kestra/flows/continuous-excavation.yaml
+id: continuous-excavation
+namespace: code-archaeologist
+description: AI-powered code archaeology with decision making
+
+triggers:
+  - id: github-webhook
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: "{{secret('GITHUB_WEBHOOK_SECRET')}}"
+
+inputs:
+  - id: repository
+    type: STRING
+    required: true
+  - id: commits
+    type: JSON
+    required: true
+  - id: pusher
+    type: STRING
+    required: true
+  - id: ref
+    type: STRING
+    required: true
+
+variables:
+  repo_url: "https://github.com/{{inputs.repository}}"
+  branch: "{{inputs.ref | replace('refs/heads/', '')}}"
+
+tasks:
+  - id: log-push
+    type: io.kestra.plugin.core.log.Log
+    message: |
+      📨 Received push to {{vars.repo_url}}
+      Branch: {{vars.branch}}
+      Pusher: {{inputs.pusher}}
+      Commits: {{inputs.commits | length}}
+
+  # ✅ KESTRA AI AGENT - Required for hackathon
+  - id: ai-risk-assessment
+    type: io.kestra.plugin.ai.agent.AIAgent
+    model: gemini-2.0-flash-exp
+    provider: google
+    apiKey: "{{secret('GEMINI_API_KEY')}}"
+    prompt: |
+      Analyze these commits for risk assessment:
+      
+      Repository: {{inputs.repository}}
+      Branch: {{vars.branch}}
+      Number of commits: {{inputs.commits | length}}
+      Pusher: {{inputs.pusher}}
+      
+      Evaluate:
+      1. Security risk (changes to auth, secrets, permissions)
+      2. Breaking changes (API changes, database migrations)
+      3. Technical debt indicators
+      
+      Output ONLY one of these decisions:
+      - AUTO_APPROVE: Low risk, can proceed automatically
+      - NEEDS_REVIEW: Medium risk, needs human review
+      - BLOCK: High risk, requires security team
+      
+      Respond with JSON: {"decision": "AUTO_APPROVE|NEEDS_REVIEW|BLOCK", "risk_score": 0-100, "reason": "brief explanation"}
+
+  # ✅ DECISION SWITCH - AI-driven branching
+  - id: decision-switch
+    type: io.kestra.plugin.core.flow.Switch
+    value: "{{ outputs['ai-risk-assessment'].output | jq('.decision') | first }}"
+    cases:
+      AUTO_APPROVE:
+        - id: auto-approve-log
+          type: io.kestra.plugin.core.log.Log
+          message: "✅ Auto-approved: Low risk changes detected"
+        - id: proceed-analysis
+          type: io.kestra.plugin.core.flow.Subflow
+          flowId: analyze-commits
+          namespace: code-archaeologist
+          wait: true
+          inputs:
+            repository: "{{inputs.repository}}"
+            commits: "{{inputs.commits}}"
+            
+      NEEDS_REVIEW:
+        - id: needs-review-log
+          type: io.kestra.plugin.core.log.Log
+          message: "⚠️ Needs review: Medium risk detected"
+        - id: pause-for-review
+          type: io.kestra.plugin.core.flow.Pause
+          description: "Human approval required for medium-risk changes"
+        - id: proceed-after-review
+          type: io.kestra.plugin.core.flow.Subflow
+          flowId: analyze-commits
+          namespace: code-archaeologist
+          wait: true
+          inputs:
+            repository: "{{inputs.repository}}"
+            commits: "{{inputs.commits}}"
+            
+      BLOCK:
+        - id: block-log
+          type: io.kestra.plugin.core.log.Log
+          message: "🚫 Blocked: High risk detected"
+        - id: alert-security
+          type: io.kestra.plugin.notifications.slack.SlackIncomingWebhook
+          url: "{{secret('SLACK_WEBHOOK_URL')}}"
+          payload: |
+            {
+              "text": "🚨 HIGH RISK ALERT: Commits to {{inputs.repository}} have been blocked",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {"type": "plain_text", "text": "🚨 Security Alert"}
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Repository:* {{vars.repo_url}}\n*Risk Score:* {{ outputs['ai-risk-assessment'].output | jq('.risk_score') | first }}\n*Reason:* {{ outputs['ai-risk-assessment'].output | jq('.reason') | first }}"
+                  }
+                }
+              ]
+            }
+
+  - id: log-completion
+    type: io.kestra.plugin.core.log.Log
+    message: |
+      ✅ AI-driven excavation complete for {{vars.repo_url}}
+      Decision: {{ outputs['ai-risk-assessment'].output | jq('.decision') | first }}
+      Execution ID: {{execution.id}}

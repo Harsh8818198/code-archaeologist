@@ -1,0 +1,60 @@
+# kestra/flows/scheduled-excavation.yaml
+id: scheduled-excavation
+namespace: temporal-archaeologist
+description: Weekly full repository analysis
+
+triggers:
+  - id: weekly-schedule
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 0 * * 0"  # Every Sunday at midnight
+
+inputs:
+  - id: repositories
+    type: JSON
+    defaults: |
+      [
+        "your-org/repo-1",
+        "your-org/repo-2"
+      ]
+
+tasks:
+  - id: analyze-repositories
+    type: io.kestra.plugin.core.flow.EachParallel
+    value: "{{inputs.repositories}}"
+    tasks:
+      - id: trigger-excavation
+        type: io.kestra.plugin.core.http.Request
+        uri: "{{secret('BACKEND_API_URL')}}/api/excavate"
+        method: POST
+        contentType: application/json
+        body: |
+          {
+            "repoUrl": "https://github.com/{{taskrun.value}}",
+            "options": {
+              "full": true,
+              "generateReport": true
+            }
+          }
+
+  - id: send-weekly-report
+    type: io.kestra.plugin.notifications.slack.SlackIncomingWebhook
+    url: "{{secret('SLACK_WEBHOOK_URL')}}"
+    payload: |
+      {
+        "blocks": [
+          {
+            "type": "header",
+            "text": {
+              "type": "plain_text",
+              "text": "📊 Weekly Code Archaeology Report"
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "The weekly archaeological analysis has completed for {{inputs.repositories | length}} repositories.\n\n<{{secret('FRONTEND_URL')}}/dashboard|View Full Report>"
+            }
+          }
+        ]
+      }
