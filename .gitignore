@@ -47,3 +47,6 @@ __pycache__/
 .vercel
 .env*.local
 backend/env
+backend/temp/
+temp/
+*.backup*
