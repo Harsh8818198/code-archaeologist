@@ -50,3 +50,4 @@ backend/env
 backend/temp/
 temp/
 *.backup*
+.trash/
