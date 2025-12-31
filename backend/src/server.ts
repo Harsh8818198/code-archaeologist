@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import excavateRouter from './routes/excavate';
 import eventsRouter from './routes/events';
+import jobsRouter from './routes/jobs';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '10000');
@@ -18,6 +19,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       excavate: '/api/excavate',
+      jobs: '/api/jobs/:jobId',
       events: '/api/events/recent'
     }
   });
@@ -32,6 +34,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/excavate', excavateRouter);
+app.use('/api/jobs', jobsRouter);
 app.use('/api/events', eventsRouter);
 
 app.listen(PORT, '0.0.0.0', () => {

@@ -20,12 +20,13 @@ export default function ExcavatePage() {
 
     try {
       console.log('Calling API:', `${API_URL}/api/excavate`);
-      
+
       const response = await fetch(`${API_URL}/api/excavate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repoPath,
+          repoUrl: repoPath, // Backend expects repoUrl
+          repoPath: repoPath, // Also send repoPath for compatibility
           options: { maxFiles, skipAnalysis: skipAI },
         }),
       });
@@ -35,11 +36,18 @@ export default function ExcavatePage() {
       }
 
       const data = await response.json();
+      console.log('API Response:', data);
+
+      // Handle both response formats
+      const jobId = data.jobId || data.data?.jobId;
       
-      if (data.success) {
-        router.push(`/results/${data.data.jobId}`);
-      } else {
+      if (jobId) {
+        // Redirect to results page
+        router.push(`/results/${jobId}`);
+      } else if (data.success === false) {
         setError(data.error || 'Failed to start excavation');
+      } else {
+        setError('Unexpected response from server');
       }
     } catch (err: any) {
       console.error('Fetch error:', err);
@@ -74,7 +82,7 @@ export default function ExcavatePage() {
                 required
               />
               <p className="text-xs text-slate-500 mt-1">
-                Enter a local path (e.g., /home/shank/projects/my-repo)
+                Enter a local path (e.g., /home/shank/projects/code-archaeologist)
               </p>
             </div>
 
@@ -135,10 +143,10 @@ export default function ExcavatePage() {
             <h3 className="font-semibold mb-2">⚙️ Setup Required</h3>
             <div className="text-sm text-slate-400 space-y-2">
               <p>Make sure API server is running:</p>
-              <code className="block bg-slate-900 p-2 rounded">
+              <code className="block bg-slate-900 p-2 rounded text-xs">
                 cd ~/projects/code-archaeologist && pnpm run start
               </code>
-              <p className="text-xs text-slate-500">API: {API_URL}</p>
+              <p className="text-xs text-slate-500 mt-2">API: {API_URL}</p>
             </div>
           </div>
         </div>
@@ -146,4 +154,3 @@ export default function ExcavatePage() {
     </main>
   );
 }
-

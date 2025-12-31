@@ -124,7 +124,7 @@ export class GeminiSynthesisEngine {
 
     // ✅ Prefer flash, fallback to anything else
     this.modelName =
-      validModels.find((m: string) => m.includes("flash")) ||
+      validModels.find((m: string) => m === "gemini-2.0-flash") ||
       validModels[0];
 
     console.log(`✅ Using model: ${this.modelName}`);
@@ -164,7 +164,7 @@ export class GeminiSynthesisEngine {
         lastError = err;
         attempt++;
         console.warn(`⚠️ Gemini error, retry ${attempt}/${this.maxRetries}`);
-        await new Promise((r) => setTimeout(r, 2000 * attempt));
+        await new Promise((r) => setTimeout(r, 5000 * attempt));
       }
     }
 

@@ -4,7 +4,7 @@ export class RedisStore {
   private client: Redis;
 
   constructor() {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const redisUrl = process.env.REDIS_URL; // Will be undefined, uses in-memory
     this.client = new Redis(redisUrl);
 
     this.client.on('connect', () => {

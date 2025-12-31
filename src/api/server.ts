@@ -6,24 +6,32 @@ import { config } from "dotenv";
 config();
 
 interface APIResponse {
-  success: boolean;
+  success?: boolean;
   data?: unknown;
   error?: string;
+  jobId?: string;
+  status?: string;
+  pollUrl?: string;
 }
 
 interface ExcavationJob {
   id: string;
+  repoUrl: string;
   repoPath: string;
-  status: "pending" | "running" | "completed" | "failed";
-  startedAt: string;
-  completedAt?: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  progress: number;
+  currentStep: string;
+  result?: any;
   error?: string;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
   report?: ExcavationReport;
 }
 
 const jobs = new Map<string, ExcavationJob>();
 
-// CORS headers helper
 function setCORSHeaders(res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
@@ -31,41 +39,60 @@ function setCORSHeaders(res: ServerResponse) {
   res.setHeader("Access-Control-Max-Age", "86400");
 }
 
-async function handleStartExcavation(
-  body: { repoPath: string; options?: Record<string, unknown> }
-): Promise<APIResponse> {
-  const { repoPath, options = {} } = body;
+// Convert repoUrl to local path (basic implementation)
+function repoUrlToPath(repoUrl: string): string {
+  // If it's already a path, return it
+  if (repoUrl.startsWith('/') || repoUrl.startsWith('./')) {
+    return repoUrl;
+  }
+  
+  // Extract repo name from URL and assume it's in ~/projects/
+  const match = repoUrl.match(/([^/]+)\.git$/) || repoUrl.match(/([^/]+)$/);
+  const repoName = match ? match[1] : 'unknown';
+  return `/home/shank/projects/${repoName}`;
+}
 
-  if (!repoPath) {
-    return { success: false, error: "repoPath is required" };
+async function handleStartExcavation(
+  body: { repoUrl?: string; repoPath?: string; options?: Record<string, unknown> }
+): Promise<APIResponse> {
+  const { repoUrl, repoPath, options = {} } = body;
+  
+  const url = repoUrl || repoPath;
+  if (!url) {
+    return { success: false, error: "repoUrl or repoPath is required" };
   }
 
+  const path = repoPath || repoUrlToPath(repoUrl!);
   const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  
   const job: ExcavationJob = {
     id: jobId,
-    repoPath,
+    repoUrl: repoUrl || path,
+    repoPath: path,
     status: "pending",
+    progress: 0,
+    currentStep: "Initializing...",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     startedAt: new Date().toISOString(),
   };
 
   jobs.set(jobId, job);
 
-  runExcavation(jobId, repoPath, options as any).catch((error) => {
+  runExcavation(jobId, path, options as any).catch((error) => {
     const j = jobs.get(jobId);
     if (j) {
       j.status = "failed";
       j.error = error.message;
       j.completedAt = new Date().toISOString();
+      j.updatedAt = new Date().toISOString();
     }
   });
 
   return {
-    success: true,
-    data: {
-      jobId,
-      status: "pending",
-      message: "Excavation started",
-    },
+    jobId,
+    status: "pending",
+    pollUrl: `/api/excavate/${jobId}`,
   };
 }
 
@@ -77,7 +104,10 @@ async function runExcavation(
   const job = jobs.get(jobId);
   if (!job) return;
 
-  job.status = "running";
+  job.status = "processing";
+  job.currentStep = "Analyzing repository...";
+  job.progress = 10;
+  job.updatedAt = new Date().toISOString();
 
   try {
     const excavator = new ExcavatorAgent(repoPath, {
@@ -86,78 +116,104 @@ async function runExcavation(
       verbose: false,
     });
 
+    job.progress = 30;
+    job.currentStep = "Running excavation...";
+    job.updatedAt = new Date().toISOString();
+
     const report = await excavator.excavate();
 
     job.status = "completed";
+    job.progress = 100;
+    job.currentStep = "Complete";
     job.completedAt = new Date().toISOString();
+    job.updatedAt = new Date().toISOString();
     job.report = report;
+    job.result = transformReportToFrontendFormat(report);
   } catch (error: any) {
     job.status = "failed";
     job.error = error.message;
     job.completedAt = new Date().toISOString();
+    job.updatedAt = new Date().toISOString();
   }
 }
 
-function handleGetJob(jobId: string): APIResponse {
+function transformReportToFrontendFormat(report: ExcavationReport): any {
+  return {
+    repoUrl: report.metadata?.repository || "unknown",
+    analyzedAt: report.metadata?.timestamp || new Date().toISOString(),
+    totalCommits: report.metadata?.totalCommits || 0,
+    totalFiles: report.metadata?.totalFiles || 0,
+    archaeologicalLayers: [],
+    fossilizedPatterns: [],
+    knowledgeGaps: [],
+    recommendations: report.insights?.recommendations || [],
+    graphData: report.knowledgeGraph ? {
+      nodes: report.knowledgeGraph.nodes || [],
+      edges: report.knowledgeGraph.edges || []
+    } : undefined
+  };
+}
+
+function handleGetExcavation(jobId: string): APIResponse {
   const job = jobs.get(jobId);
   if (!job) {
     return { success: false, error: "Job not found" };
   }
 
+  // Return in frontend format
   return {
-    success: true,
-    data: {
-      id: job.id,
-      repoPath: job.repoPath,
-      status: job.status,
-      startedAt: job.startedAt,
-      completedAt: job.completedAt,
-      error: job.error,
-      hasReport: !!job.report,
-    },
-  };
+    id: job.id,
+    repoUrl: job.repoUrl,
+    status: job.status,
+    progress: job.progress,
+    currentStep: job.currentStep,
+    result: job.result,
+    error: job.error,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  } as any;
 }
 
-function handleGetReport(jobId: string): APIResponse {
-  const job = jobs.get(jobId);
-  if (!job) {
-    return { success: false, error: "Job not found" };
-  }
-  if (job.status !== "completed") {
-    return { success: false, error: `Job status is ${job.status}` };
-  }
+function handleGetRecentExcavations(limit: number = 10): APIResponse {
+  const jobList = Array.from(jobs.values())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit)
+    .map((j) => ({
+      id: j.id,
+      repoUrl: j.repoUrl,
+      status: j.status,
+      progress: j.progress,
+      currentStep: j.currentStep,
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+    }));
 
-  return {
-    success: true,
-    data: job.report,
-  };
+  return jobList as any;
 }
 
-function handleListJobs(): APIResponse {
-  const jobList = Array.from(jobs.values()).map((j) => ({
-    id: j.id,
-    repoPath: j.repoPath,
-    status: j.status,
-    startedAt: j.startedAt,
-    completedAt: j.completedAt,
-  }));
+function handleGetRecentActivity(limit: number = 20): any[] {
+  const activities = Array.from(jobs.values())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit)
+    .map((j) => ({
+      id: j.id,
+      type: j.status === 'completed' ? 'excavation-completed' : 'excavation-started',
+      repoUrl: j.repoUrl,
+      message: `Excavation ${j.status} for ${j.repoUrl}`,
+      timestamp: j.updatedAt,
+      metadata: { jobId: j.id }
+    }));
 
-  return {
-    success: true,
-    data: jobList,
-  };
+  return activities;
 }
 
 function handleHealth(): APIResponse {
   return {
-    success: true,
-    data: {
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      version: "0.1.0",
-      jobsActive: jobs.size,
-    },
-  };
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    version: "0.1.0",
+    jobsActive: jobs.size,
+  } as any;
 }
 
 async function parseBody(req: IncomingMessage): Promise<unknown> {
@@ -182,64 +238,105 @@ async function handleRequest(
   const { pathname, query } = parseUrl(req.url || "/", true);
   const method = req.method || "GET";
 
-  // Set CORS headers for all requests
   setCORSHeaders(res);
+  res.setHeader("Content-Type", "application/json");
 
-  // Handle OPTIONS preflight
   if (method === "OPTIONS") {
     res.writeHead(204);
     res.end();
     return;
   }
 
-  let response: APIResponse;
+  let response: any;
+  let statusCode = 200;
 
   try {
-    if (pathname === "/health" && method === "GET") {
+    // Health endpoints
+    if ((pathname === "/health" || pathname === "/api/health") && method === "GET") {
       response = handleHealth();
-    } else if (pathname === "/api/excavate" && method === "POST") {
+    }
+    // Start excavation
+    else if (pathname === "/api/excavate" && method === "POST") {
       const body = await parseBody(req);
       response = await handleStartExcavation(body as any);
-    } else if (pathname?.startsWith("/api/jobs/") && method === "GET") {
+    }
+    // Get specific excavation
+    else if (pathname?.match(/^\/api\/excavate\/[^/]+$/) && method === "GET") {
+      const jobId = pathname.split("/")[3];
+      response = handleGetExcavation(jobId);
+    }
+    // Get recent excavations
+    else if (pathname === "/api/excavations/recent" && method === "GET") {
+      const limit = parseInt(query.limit as string) || 10;
+      response = handleGetRecentExcavations(limit);
+    }
+    // Get recent activity
+    else if (pathname === "/api/activity/recent" && method === "GET") {
+      const limit = parseInt(query.limit as string) || 20;
+      response = handleGetRecentActivity(limit);
+    }
+    // Legacy job endpoints
+    else if (pathname?.startsWith("/api/jobs/") && method === "GET") {
       const parts = pathname.split("/");
       const jobId = parts[3];
       if (pathname.endsWith("/report")) {
-        response = handleGetReport(jobId);
+        const job = jobs.get(jobId);
+        if (!job) {
+          response = { success: false, error: "Job not found" };
+          statusCode = 404;
+        } else if (job.status !== "completed") {
+          response = { success: false, error: `Job status is ${job.status}` };
+          statusCode = 400;
+        } else {
+          response = { success: true, data: job.report };
+        }
       } else {
-        response = handleGetJob(jobId);
+        response = handleGetExcavation(jobId);
       }
-    } else if (pathname === "/api/jobs" && method === "GET") {
-      response = handleListJobs();
-    } else {
+    }
+    else if (pathname === "/api/jobs" && method === "GET") {
+      response = { success: true, data: Array.from(jobs.values()) };
+    }
+    else {
       response = { success: false, error: "Not found" };
-      res.writeHead(404);
+      statusCode = 404;
     }
   } catch (error: any) {
     console.error("Request error:", error);
     response = { success: false, error: error.message };
-    res.writeHead(500);
+    statusCode = 500;
   }
 
-  res.setHeader("Content-Type", "application/json");
-  if (!res.headersSent) {
-    res.writeHead(response.success ? 200 : 400);
-  }
+  res.writeHead(statusCode);
   res.end(JSON.stringify(response, null, 2));
 }
 
 function startServer(port: number = 3001): void {
-  const server = createServer(handleRequest);
+  const server = createServer((req, res) => {
+    handleRequest(req, res).catch((error) => {
+      console.error("Unhandled error:", error);
+      if (!res.headersSent) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ success: false, error: "Internal server error" }));
+      }
+    });
+  });
 
   server.listen(port, "0.0.0.0", () => {
     console.log(`
 🏛️  Code Archaeologist API Server
 ═════════════════════════════════════
 🚀 Server: http://localhost:${port}
-🌍 Network: http://0.0.0.0:${port}
-📊 Status: http://localhost:${port}/health
+📊 Health: http://localhost:${port}/health
 
-CORS enabled for all origins
-Ready to accept requests!
+Frontend-Compatible Endpoints:
+  GET  /health                      - Server status
+  POST /api/excavate                - Start excavation
+  GET  /api/excavate/:id            - Get excavation status
+  GET  /api/excavations/recent      - List recent excavations
+  GET  /api/activity/recent         - Get activity feed
+
+Ready! ✅
 ═════════════════════════════════════
     `);
   });
