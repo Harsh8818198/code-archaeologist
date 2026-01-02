@@ -197,47 +197,41 @@ export class GeminiSynthesisEngine {
     commits: CommitInfo[]
   ): Promise<ArchaeologicalAnalysis> {
     const commitText = commits
-      .slice(0, 5)
-      .map(c => `${c.hash.slice(0, 7)} | ${c.author} | ${c.message}`)
+      .map(
+        (c) =>
+          `${c.hash.slice(0, 7)} | ${c.date} | ${c.author} | ${c.message}`
+      )
       .join("\n");
 
-    const prompt = `Analyze this code file. Return ONLY a JSON object, no markdown.
+    const prompt = `
+Analyze this file and return ONLY JSON:
 
 FILE: ${code.filePath}
-CODE: ${code.code.substring(0, 2000)}
-COMMITS: ${commitText}
+LANG: ${code.language}
 
-Return this exact JSON structure with your analysis:
-{"summary":"what this file does","businessContext":"why it exists","technicalRationale":"technical decisions","dependencies":["dep1"],"risks":["risk1"],"recommendations":["rec1"],"confidenceScore":0.8}`;
+CODE:
+${code.code}
+
+COMMITS:
+${commitText}
+
+Return:
+{
+  "summary": "",
+  "businessContext": "",
+  "technicalRationale": "",
+  "dependencies": [],
+  "risks": [],
+  "recommendations": [],
+  "confidenceScore": 0.0
+}
+`;
 
     const raw = await this.generate(prompt);
-    console.log("DEBUG RAW:", raw.substring(0, 300));
-    
-    try {
-      const parsed = this.parseJson(raw);
-      return {
-        summary: parsed.summary || "No summary",
-        businessContext: parsed.businessContext || "",
-        technicalRationale: parsed.technicalRationale || "",
-        dependencies: parsed.dependencies || [],
-        risks: parsed.risks || [],
-        recommendations: parsed.recommendations || [],
-        confidenceScore: parsed.confidenceScore || 0.5
-      };
-    } catch (e) {
-      return {
-        summary: "Parse failed",
-        businessContext: "",
-        technicalRationale: "",
-        dependencies: [],
-        risks: [],
-        recommendations: [],
-        confidenceScore: 0
-      };
-    }
+    return this.parseJson(raw);
   }
-
 }
+
 // ============================
 // ✅ SINGLETON
 // ============================

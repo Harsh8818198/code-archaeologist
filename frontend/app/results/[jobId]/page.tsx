@@ -361,7 +361,7 @@ function InsightCard({ title, items, color = 'purple' }: { title: string; items:
   );
 }
 
-function FileCard({ file }: { file: Report['files'][0] }) {
+function FileCard({ file }: { file: NonNullable<Report["files"]>[number] }) {
   const [expanded, setExpanded] = useState(false);
 
   return (

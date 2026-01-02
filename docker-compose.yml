@@ -12,8 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    networks:
-      - kestra-network
 
   kestra:
     image: kestra/kestra:latest
@@ -44,13 +42,7 @@ services:
       - ./kestra-flows:/app/flows
     depends_on:
       - postgres
-    networks:
-      - kestra-network
 
 volumes:
   postgres-data:
   kestra-data:
-
-networks:
-  kestra-network:
-    driver: bridge

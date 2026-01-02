@@ -1,0 +1,12 @@
+    const raw = await this.generate(prompt);
+    
+    // DEBUG: Show what Gemini returned
+    console.log("\n🔍 ===== GEMINI DEBUG =====");
+    console.log("📤 PROMPT SENT (first 300 chars):", prompt.substring(0, 300));
+    console.log("📥 RAW RESPONSE (first 500 chars):", raw.substring(0, 500));
+    
+    const parsed = this.parseJson(raw);
+    console.log("✅ PARSED JSON:", JSON.stringify(parsed, null, 2));
+    console.log("🔍 ===== END DEBUG =====\n");
+    
+    return parsed;
