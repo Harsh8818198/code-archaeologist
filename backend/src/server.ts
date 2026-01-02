@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import excavateRouter from './routes/excavate';
 import eventsRouter from './routes/events';
+import kestraWebhookRouter from './routes/kestra-webhook';
 import jobsRouter from './routes/jobs';
 
 const app = express();
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => {
 app.use('/api/excavate', excavateRouter);
 app.use('/api/jobs', jobsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/kestra', kestraWebhookRouter);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Code Archaeologist API running on port ${PORT}`);

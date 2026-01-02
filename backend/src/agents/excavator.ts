@@ -31,6 +31,7 @@ import {
   formatDuration,
   progressBar,
 } from "../lib/utils.js";
+import { getOumiClient } from "../lib/oumi-client.js";
 import { config } from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
@@ -117,6 +118,7 @@ export interface ExcavationOptions {
 export class ExcavatorAgent {
   private git: SimpleGit;
   private gemini: GeminiSynthesisEngine;
+  private oumiClient = getOumiClient();
   private repoPath: string;
   private options: Required<ExcavationOptions>;
   private isInteractive: boolean = false;

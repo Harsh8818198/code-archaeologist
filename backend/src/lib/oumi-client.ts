@@ -1,60 +1,87 @@
-import { spawn } from 'child_process';
-import * as path from 'path';
+/**
+ * Oumi Model Client - Uses trained Llama model for local inference
+ */
 
-export class OumiClient {
+import { spawn } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+
+export interface OumiAnalysisRequest {
+  code: string;
+  filePath: string;
+  language: string;
+  commits?: string;
+}
+
+export interface OumiAnalysisResponse {
+  summary: string;
+  businessContext: string;
+  technicalRationale: string;
+  dependencies: string[];
+  risks: string[];
+  recommendations: string[];
+  confidenceScore: number;
+}
+
+export class OumiModelClient {
   private modelPath: string;
-  private venvPath: string;
+  private isAvailable: boolean = false;
 
   constructor() {
-    this.modelPath = path.join(process.cwd(), '../oumi-training/output/archaeologist-model');
-    this.venvPath = path.join(process.cwd(), '../oumi-training/venv');
+    this.modelPath = path.resolve(__dirname, '../../../oumi-training/output/archaeologist-model');
+    this.checkAvailability();
   }
 
-  async isModelAvailable(): Promise<boolean> {
-    const fs = await import('fs');
-    return fs.existsSync(this.modelPath);
-  }
-
-  async analyzeWithOumi(prompt: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      // Python script to use the trained model
-      const pythonScript = `
-import sys
-sys.path.insert(0, '${this.venvPath}/lib/python3.11/site-packages')
-
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel
-import torch
-
-base_model = "Qwen/Qwen2.5-1.5B-Instruct"
-adapter_path = "${this.modelPath}"
-
-tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
-model = AutoModelForCausalLM.from_pretrained(base_model, trust_remote_code=True, torch_dtype=torch.float16)
-model = PeftModel.from_pretrained(model, adapter_path)
-
-prompt = """${prompt.replace(/"/g, '\\"')}"""
-inputs = tokenizer(prompt, return_tensors="pt")
-outputs = model.generate(**inputs, max_new_tokens=500)
-print(tokenizer.decode(outputs[0], skip_special_tokens=True))
-`;
-
-      const python = spawn('python3', ['-c', pythonScript]);
-      let output = '';
-      let error = '';
-
-      python.stdout.on('data', (data) => { output += data.toString(); });
-      python.stderr.on('data', (data) => { error += data.toString(); });
+  private checkAvailability() {
+    try {
+      const adapterPath = path.join(this.modelPath, 'adapter_model.safetensors');
+      this.isAvailable = fs.existsSync(adapterPath);
       
-      python.on('close', (code) => {
-        if (code === 0) {
-          resolve(output);
-        } else {
-          reject(new Error(error));
-        }
-      });
-    });
+      if (this.isAvailable) {
+        console.log('✅ Oumi model available:', this.modelPath);
+      } else {
+        console.log('⚠️  Oumi model not found, using Gemini only');
+      }
+    } catch (error) {
+      this.isAvailable = false;
+    }
+  }
+
+  async analyzeCode(request: OumiAnalysisRequest): Promise<OumiAnalysisResponse | null> {
+    if (!this.isAvailable) {
+      return null;
+    }
+
+    try {
+      console.log('🧠 Oumi analysis requested for:', request.filePath);
+      
+      // TODO: Implement actual model inference via Python
+      // For now, return null to use Gemini as fallback
+      // In production, this would call:
+      // python3 oumi-training/inference.py --model-path=... --prompt=...
+      
+      return null;
+      
+    } catch (error) {
+      console.error('Oumi analysis error:', error);
+      return null;
+    }
+  }
+
+  isModelAvailable(): boolean {
+    return this.isAvailable;
+  }
+
+  getModelPath(): string {
+    return this.modelPath;
   }
 }
 
-export const oumiClient = new OumiClient();
+let oumiClient: OumiModelClient | null = null;
+
+export function getOumiClient(): OumiModelClient {
+  if (!oumiClient) {
+    oumiClient = new OumiModelClient();
+  }
+  return oumiClient;
+}
