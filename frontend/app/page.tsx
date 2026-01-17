@@ -23,7 +23,7 @@ function AncientArtifacts({ mouse }: { mouse: { x: number; y: number } }) {
 
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
-    
+
     // Rotate artifacts based on mouse and time
     if (scrollRef.current) {
       scrollRef.current.rotation.x = Math.sin(t * 0.2) * 0.2 + mouse.y * 0.5;
@@ -107,7 +107,7 @@ function AncientArtifacts({ mouse }: { mouse: { x: number; y: number } }) {
 
       {/* Golden Dust Particles */}
       <ThreeSparkles count={200} scale={15} size={2} speed={0.4} opacity={0.6} color="#fbbf24" />
-      
+
       <Environment preset="city" />
     </>
   );
@@ -121,7 +121,7 @@ const FeatureCard = ({ title, description, icon: Icon, color, delay }: { title: 
     purple: "from-purple-500/20 to-fuchsia-500/20 border-purple-500/30 hover:border-purple-400",
     green: "from-emerald-500/20 to-green-500/20 border-emerald-500/30 hover:border-emerald-400",
   };
-  
+
   const iconColors = {
     blue: "text-blue-400",
     purple: "text-purple-400",
@@ -168,7 +168,7 @@ const StoneBadge = ({ name, icon, color, delay }: { name: string; icon: string; 
     className="group relative flex flex-col items-center"
   >
     <div className={`
-      w-24 h-24 rounded-2xl flex items-center justify-center text-4xl shadow-2xl 
+      w-24 h-24 rounded-2xl flex items-center justify-center text-4xl shadow-2xl
       bg-gradient-to-br ${color} relative z-10
       border border-white/10 backdrop-blur-sm
       group-hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all duration-500
@@ -179,10 +179,10 @@ const StoneBadge = ({ name, icon, color, delay }: { name: string; icon: string; 
       {/* Inner Glow */}
       <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
     </div>
-    
+
     {/* Pedestal Base */}
     <div className="w-20 h-4 bg-slate-800/80 mt-2 rounded-full blur-sm" />
-    
+
     <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 absolute top-full pt-2">
       <div className="px-4 py-2 bg-slate-900/90 border border-slate-700 rounded-lg text-sm font-bold text-white whitespace-nowrap">
         {name}
@@ -201,7 +201,7 @@ const StatTablet = ({ value, label, delay }: { value: string; label: string; del
   >
     {/* Stone Texture Overlay */}
     <div className="absolute inset-0 bg-stone-texture opacity-50 mix-blend-overlay rounded-lg pointer-events-none" />
-    
+
     {/* Engraved Effect */}
     <div className="relative z-10">
       <h4 className="text-5xl md:text-6xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-b from-[#fbbf24] to-[#d97706] drop-shadow-sm filter">
@@ -211,7 +211,7 @@ const StatTablet = ({ value, label, delay }: { value: string; label: string; del
         {label}
       </p>
     </div>
-    
+
     {/* Border Glow */}
     <div className="absolute inset-0 border border-[#fbbf24]/0 group-hover:border-[#fbbf24]/30 rounded-lg transition-colors duration-500" />
   </motion.div>
@@ -239,7 +239,7 @@ export default function Home() {
 
   return (
     <main ref={containerRef} className="bg-obsidian min-h-screen selection:bg-amber-500/30">
-      
+
       {/* 3D Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Canvas gl={{ antialias: true, alpha: true }}>
@@ -258,7 +258,7 @@ export default function Home() {
 
       {/* HERO SECTION - "THE TEMPLE ENTRANCE" */}
       <section className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 pt-20">
-        <motion.div 
+        <motion.div
           style={{ opacity, scale }}
           className="text-center max-w-6xl mx-auto"
         >
@@ -416,7 +416,7 @@ export default function Home() {
       {/* FINAL CTA - "THE TREASURE" */}
       <section className="relative z-10 py-40 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-900/20 via-[#0a0a0a] to-[#0a0a0a]" />
-        
+
         <div className="container mx-auto px-4 relative text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -426,9 +426,9 @@ export default function Home() {
           >
             {/* Treasure Glow */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/30 blur-[100px]" />
-            
+
             <div className="text-6xl mb-6 transform group-hover:scale-110 transition-transform duration-500">⚱️</div>
-            
+
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 font-serif">
               The Treasure Awaits
             </h2>
@@ -436,7 +436,7 @@ export default function Home() {
               Your codebase contains lost treasures and forgotten decisions.
               <br />What secrets will you uncover today?
             </p>
-            
+
             <Link href="/excavate">
               <button className="px-12 py-6 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full text-white text-xl font-bold shadow-[0_0_40px_rgba(245,158,11,0.4)] hover:shadow-[0_0_60px_rgba(245,158,11,0.6)] hover:scale-105 transition-all duration-300">
                 Start Your Expedition

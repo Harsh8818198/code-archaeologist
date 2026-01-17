@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
-    
+
     return NextResponse.json(data, { status: response.status });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(`${BACKEND_URL}/api/excavate/${jobId}`);
     const data = await response.json();
-    
+
     return NextResponse.json(data, { status: response.status });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';

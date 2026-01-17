@@ -40,7 +40,7 @@ export default function ExcavatePage() {
 
       // Handle both response formats
       const jobId = data.jobId || data.data?.jobId;
-      
+
       if (jobId) {
         // Redirect to results page
         router.push(`/results/${jobId}`);

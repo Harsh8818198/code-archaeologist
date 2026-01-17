@@ -77,17 +77,17 @@ export default function ResultsPage() {
       try {
         console.log('Fetching job status:', jobId);
         const response = await fetch(`${API_URL}/api/jobs/${jobId}`);
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
         console.log('Job response:', data);
 
         // Handle both response formats
         const jobData = data.success ? data.data : data;
-        
+
         if (jobData && jobData.id) {
           setJob(jobData);
 
@@ -190,7 +190,7 @@ export default function ResultsPage() {
           {(job.status === 'running' || job.status === 'processing') && (
             <div className="mt-4">
               <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
                   style={{ width: `${job.progress || 0}%` }}
                 ></div>
@@ -293,8 +293,8 @@ export default function ResultsPage() {
         )}
 
         <div className="mt-8 text-center">
-          <a 
-            href="/excavate" 
+          <a
+            href="/excavate"
             className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all"
           >
             ← Start New Excavation
@@ -339,7 +339,7 @@ function InsightCard({ title, items, color = 'purple' }: { title: string; items:
     purple: 'border-purple-500/30',
     green: 'border-green-500/30',
   };
-  
+
   const borderColor = borderColors[color as keyof typeof borderColors] || borderColors.purple;
 
   return (
