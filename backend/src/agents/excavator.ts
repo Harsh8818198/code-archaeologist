@@ -356,22 +356,57 @@ export class ExcavatorAgent {
     const commits = await this.getFileCommits(filePath);
     const authors = [...new Set(commits.map((c) => c.author))];
 
-    // AI Analysis (if enabled)
+    // ============================================
+    // THREE-TIER AI ANALYSIS
+    // ============================================
     let analysis: ArchaeologicalAnalysis | null = null;
+    
     if (!this.options.skipAnalysis && commits.length > 0) {
+      const commitMessages = commits.slice(0, this.options.maxCommitsPerFile).map(c => c.message);
+      
       try {
-        analysis = await this.gemini.analyzeCodeContext(
-          {
+        // TIER 1: Try Oumi pattern matching (fast, < 100ms)
+        if (this.oumiClient.isModelAvailable()) {
+          const oumiResult = await this.oumiClient.analyzeCode(
             filePath,
-            code: content.slice(0, 4000), // Limit code size
+            content.slice(0, 4000),
             language,
-          },
-          commits.slice(0, this.options.maxCommitsPerFile)
-        );
+            commitMessages
+          );
 
-        if (this.options.verbose && analysis) {
-          console.log(`   ✓ Analysis: ${analysis.summary.slice(0, 60)}...`);
+          if (oumiResult && oumiResult.confidenceScore > 0.7) {
+            analysis = {
+              summary: oumiResult.summary,
+              businessContext: oumiResult.businessContext,
+              technicalRationale: oumiResult.technicalRationale,
+              dependencies: oumiResult.dependencies,
+              risks: oumiResult.risks,
+              recommendations: oumiResult.recommendations,
+              confidenceScore: oumiResult.confidenceScore
+            };
+
+            if (this.options.verbose) {
+              console.log(`   ⚡ Oumi: ${analysis.summary.slice(0, 60)}...`);
+            }
+          }
         }
+
+        // TIER 2: Gemini for complex analysis
+        if (!analysis) {
+          analysis = await this.gemini.analyzeCodeContext(
+            {
+              filePath,
+              code: content.slice(0, 4000),
+              language,
+            },
+            commits.slice(0, this.options.maxCommitsPerFile)
+          );
+
+          if (this.options.verbose && analysis) {
+            console.log(`   ✓ Gemini: ${analysis.summary.slice(0, 60)}...`);
+          }
+        }
+
       } catch (error: any) {
         if (this.options.verbose) {
           console.log(`   ⚠️ Analysis failed: ${error.message?.slice(0, 50)}`);

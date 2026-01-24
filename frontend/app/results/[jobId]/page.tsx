@@ -1,20 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
+import { subscribeToJob, unsubscribeFromJob, isSupabaseAvailable } from '@/lib/supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface JobStatus {
   id: string;
-  repoPath: string;
+  repoPath?: string;
+  repo_url?: string;
   status: 'pending' | 'processing' | 'running' | 'completed' | 'failed';
   progress: number;
-  currentStep: string;
+  currentStep?: string;
+  current_step?: string;
   startedAt?: string;
   completedAt?: string;
   error?: string;
+  error_message?: string;
   hasReport?: boolean;
 }
 
@@ -22,6 +26,7 @@ interface Report {
   repository: string;
   excavationDate: string;
   durationSeconds: number;
+  modelUsed?: string;
   metadata?: {
     repository?: string;
     timestamp?: string;
@@ -44,7 +49,7 @@ interface Report {
   };
   knowledgeGraph?: {
     nodes: Array<{ id: string; type: string; label: string; [key: string]: any }>;
-    edges: Array<{ source: string; target: string; relationship?: string; [key: string]: any }>;
+    edges: Array<{ source: string; target: string; relationship: string; [key: string]: any }>;
   };
   files?: Array<{
     path: string;
@@ -71,170 +76,295 @@ export default function ResultsPage() {
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRealtime, setIsRealtime] = useState(false);
+
+  // Fetch job status from API
+  const fetchStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/excavate/${jobId}`);
+      if (!response.ok) throw new Error('Failed to fetch job status');
+      const data = await response.json();
+      
+      // Normalize the response
+      const normalizedJob: JobStatus = {
+        id: data.id,
+        repoPath: data.repoUrl || data.repo_url,
+        status: data.status,
+        progress: data.progress || 0,
+        currentStep: data.currentStep || data.current_step || '',
+        error: data.error || data.error_message,
+        hasReport: data.hasReport || data.status === 'completed',
+      };
+      
+      setJob(normalizedJob);
+      setError(null);
+      
+      // Fetch report if completed
+      if (normalizedJob.status === 'completed' && !report) {
+        fetchReport();
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId, report]);
+
+  // Fetch full report
+  const fetchReport = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/excavate/${jobId}/report`);
+      if (!response.ok) throw new Error('Failed to fetch report');
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Normalize edges to ensure relationship is always present
+        if (data.data.knowledgeGraph?.edges) {
+          data.data.knowledgeGraph.edges = data.data.knowledgeGraph.edges.map((edge: any) => ({
+            ...edge,
+            relationship: edge.relationship || edge.label || 'related'
+          }));
+        }
+        setReport(data.data);
+      }
+    } catch (err: any) {
+      console.error('Report fetch error:', err);
+    }
+  };
 
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        console.log('Fetching job status:', jobId);
-        const response = await fetch(`${API_URL}/api/jobs/${jobId}`);
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Job response:', data);
-
-        // Handle both response formats
-        const jobData = data.success ? data.data : data;
-
-        if (jobData && jobData.id) {
-          setJob(jobData);
-
-          // Fetch report if completed
-          if (jobData.status === 'completed' && jobData.hasReport !== false) {
-            console.log('Fetching report...');
-            const reportResponse = await fetch(`${API_URL}/api/jobs/${jobId}/report`);
-            const reportData = await reportResponse.json();
-            console.log('Report response:', reportData);
-
-            if (reportData.success && reportData.data) {
-              setReport(reportData.data);
-            } else if (reportData && !reportData.success) {
-              // Report might not be ready yet
-              console.log('Report not ready:', reportData.error);
-            }
-          }
-        } else {
-          setError(data.error || 'Invalid response from server');
-        }
-      } catch (err: any) {
-        console.error('Fetch error:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    // Initial fetch
     fetchStatus();
 
-    // Poll every 3 seconds if job is still running
+    // Try real-time subscription
+    let channel: any = null;
+    
+    if (isSupabaseAvailable()) {
+      channel = subscribeToJob(
+        jobId,
+        (updatedJob) => {
+          console.log('🔄 Real-time update:', updatedJob.status, updatedJob.progress);
+          
+          const normalizedJob: JobStatus = {
+            id: updatedJob.id,
+            repoPath: updatedJob.repo_url,
+            status: updatedJob.status,
+            progress: updatedJob.progress || 0,
+            currentStep: updatedJob.current_step || '',
+            error: updatedJob.error_message,
+            hasReport: updatedJob.status === 'completed',
+          };
+          
+          setJob(normalizedJob);
+          
+          // Fetch report when completed
+          if (updatedJob.status === 'completed') {
+            fetchReport();
+          }
+        },
+        () => {
+          console.warn('Real-time failed, using polling');
+          setIsRealtime(false);
+        }
+      );
+      
+      if (channel) {
+        setIsRealtime(true);
+      }
+    }
+
+    // Fallback polling (only if not using real-time OR job is still processing)
     const interval = setInterval(() => {
-      if (job?.status === 'pending' || job?.status === 'processing' || job?.status === 'running') {
+      if (!isRealtime) {
         fetchStatus();
       }
-    }, 3000);
+    }, 2000);
 
-    return () => clearInterval(interval);
-  }, [jobId, job?.status]);
+    return () => {
+      clearInterval(interval);
+      if (channel) unsubscribeFromJob(channel);
+    };
+  }, [jobId]);
+
+  // Refetch report when job completes
+  useEffect(() => {
+    if (job?.status === 'completed' && !report) {
+      fetchReport();
+    }
+  }, [job?.status, report]);
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-        <div className="container mx-auto px-4 py-20">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mb-4"></div>
-            <h1 className="text-2xl font-semibold">Loading excavation results...</h1>
-          </div>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading excavation...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
-  if (error || !job) {
+  if (error) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-        <div className="container mx-auto px-4 py-20">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-red-400 mb-4">Error</h1>
-            <p className="text-slate-400 mb-4">{error || 'Job not found'}</p>
-            <a href="/excavate" className="text-purple-400 hover:text-purple-300">
-              ← Start a new excavation
-            </a>
-          </div>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center bg-red-900/20 border border-red-500/30 rounded-xl p-8 max-w-md">
+          <div className="text-red-400 text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-red-400 mb-2">Error</h2>
+          <p className="text-slate-400">{error}</p>
+          <button 
+            onClick={fetchStatus}
+            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+          >
+            Retry
+          </button>
         </div>
-      </main>
+      </div>
     );
   }
-
-  // Normalize report data
-  const stats = report?.stats || {
-    totalFiles: report?.metadata?.totalFiles || 0,
-    analyzedFiles: report?.metadata?.analyzedFiles || 0,
-    totalCommits: report?.metadata?.totalCommits || 0,
-    totalAuthors: report?.metadata?.totalAuthors || 0,
-  };
-
-  const insights = report?.insights || {
-    businessDomains: [],
-    hotspots: [],
-    riskAreas: [],
-  };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-      <div className="container mx-auto px-4 py-20">
-        <h1 className="text-4xl font-bold mb-8">🏛️ Excavation Results</h1>
-
-        {/* Job Status */}
-        <div className="bg-slate-800 rounded-lg p-6 mb-8 border border-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold mb-2">Job Status</h2>
-              <p className="text-sm text-slate-400">Job ID: {jobId}</p>
-              <p className="text-sm text-slate-400">Repository: {job.repoPath}</p>
-            </div>
-            <StatusBadge status={job.status} />
+    <div className="min-h-screen bg-slate-900 text-white p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-amber-400 flex items-center gap-3">
+              🏛️ Excavation Results
+              {isRealtime && (
+                <span className="text-green-400 text-sm flex items-center gap-1 bg-green-900/30 px-2 py-1 rounded-full">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                  Live
+                </span>
+              )}
+            </h1>
+            <p className="text-slate-400 mt-1">
+              Job ID: <code className="text-amber-500">{jobId.slice(0, 8)}...</code>
+            </p>
           </div>
-
-          {(job.status === 'running' || job.status === 'processing') && (
-            <div className="mt-4">
-              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
-                  style={{ width: `${job.progress || 0}%` }}
-                ></div>
-              </div>
-              <p className="text-sm text-slate-400 mt-2">{job.currentStep || 'Analyzing repository...'}</p>
-            </div>
-          )}
-
-          {job.error && (
-            <div className="mt-4 p-4 bg-red-900/20 border border-red-500 rounded">
-              <p className="text-red-400">{job.error}</p>
-            </div>
-          )}
+          <a 
+            href="/excavate" 
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-600"
+          >
+            ← New Excavation
+          </a>
         </div>
 
-        {/* Report */}
+        {/* Status Card */}
+        {job && job.status !== 'completed' && (
+          <div className="bg-slate-800 rounded-xl p-6 mb-8 border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">
+                {job.status === 'processing' ? '⏳ Processing...' : 
+                 job.status === 'pending' ? '🕐 Pending...' :
+                 job.status === 'failed' ? '❌ Failed' : '📊 Status'}
+              </h2>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                job.status === 'processing' ? 'bg-blue-900/50 text-blue-300' :
+                job.status === 'pending' ? 'bg-yellow-900/50 text-yellow-300' :
+                job.status === 'failed' ? 'bg-red-900/50 text-red-300' :
+                'bg-green-900/50 text-green-300'
+              }`}>
+                {job.status}
+              </span>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-slate-400 mb-1">
+                <span>{job.currentStep || 'Initializing...'}</span>
+                <span>{job.progress}%</span>
+              </div>
+              <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-500"
+                  style={{ width: `${job.progress}%` }}
+                />
+              </div>
+            </div>
+
+            {job.error && (
+              <div className="mt-4 p-4 bg-red-900/30 border border-red-500/30 rounded-lg text-red-300">
+                {job.error}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Report Content */}
         {report && (
           <>
-            {/* Summary Stats */}
-            <div className="grid md:grid-cols-4 gap-4 mb-8">
-              <StatCard
-                label="Files Analyzed"
-                value={stats.analyzedFiles}
-                total={stats.totalFiles}
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <StatCard 
+                label="Files Analyzed" 
+                value={report.stats?.analyzedFiles || report.metadata?.analyzedFiles || 0} 
+                icon="📂"
               />
-              <StatCard
-                label="Total Commits"
-                value={stats.totalCommits}
+              <StatCard 
+                label="Total Commits" 
+                value={report.stats?.totalCommits || report.metadata?.totalCommits || 0} 
+                icon="📝"
               />
-              <StatCard
-                label="Contributors"
-                value={stats.totalAuthors}
+              <StatCard 
+                label="Contributors" 
+                value={report.stats?.totalAuthors || report.metadata?.totalAuthors || 0} 
+                icon="👥"
               />
-              <StatCard
-                label="Duration"
-                value={report.durationSeconds ? `${report.durationSeconds.toFixed(1)}s` : 'N/A'}
+              <StatCard 
+                label="Duration" 
+                value={`${report.durationSeconds?.toFixed(1) || 0}s`} 
+                icon="⏱️"
               />
             </div>
 
+            {/* Model Used Badge */}
+            {report.modelUsed && (
+              <div className="mb-6">
+                <span className="inline-flex items-center gap-2 px-3 py-1 bg-purple-900/30 border border-purple-500/30 rounded-full text-purple-300 text-sm">
+                  🤖 Model: {report.modelUsed}
+                </span>
+              </div>
+            )}
+
+            {/* Insights */}
+            {report.insights && (
+              <div className="grid md:grid-cols-2 gap-6 mb-8">
+                {report.insights.businessDomains && report.insights.businessDomains.length > 0 && (
+                  <InsightCard 
+                    title="📋 Business Domains" 
+                    items={report.insights.businessDomains} 
+                    color="blue"
+                  />
+                )}
+                {report.insights.hotspots && report.insights.hotspots.length > 0 && (
+                  <InsightCard 
+                    title="🔥 Hotspots" 
+                    items={report.insights.hotspots} 
+                    color="orange"
+                  />
+                )}
+                {report.insights.riskAreas && report.insights.riskAreas.length > 0 && (
+                  <InsightCard 
+                    title="⚠️ Risk Areas" 
+                    items={report.insights.riskAreas} 
+                    color="red"
+                  />
+                )}
+                {report.insights.recommendations && report.insights.recommendations.length > 0 && (
+                  <InsightCard 
+                    title="💡 Recommendations" 
+                    items={report.insights.recommendations} 
+                    color="green"
+                  />
+                )}
+              </div>
+            )}
+
             {/* Knowledge Graph */}
-            {report.knowledgeGraph && report.knowledgeGraph.nodes && report.knowledgeGraph.nodes.length > 0 && (
+            {report.knowledgeGraph && report.knowledgeGraph.nodes.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-2xl font-bold mb-4">🕸️ Knowledge Graph</h2>
-                <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
                   <KnowledgeGraph
                     nodes={report.knowledgeGraph.nodes}
                     edges={report.knowledgeGraph.edges}
@@ -243,29 +373,10 @@ export default function ResultsPage() {
               </div>
             )}
 
-            {/* Insights */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              {insights.businessDomains && insights.businessDomains.length > 0 && (
-                <InsightCard title="📋 Business Domains" items={insights.businessDomains} />
-              )}
-
-              {insights.hotspots && insights.hotspots.length > 0 && (
-                <InsightCard title="🔥 Hotspots" items={insights.hotspots} />
-              )}
-
-              {insights.riskAreas && insights.riskAreas.length > 0 && (
-                <InsightCard title="⚠️ Risk Areas" items={insights.riskAreas} color="red" />
-              )}
-
-              {insights.recommendations && insights.recommendations.length > 0 && (
-                <InsightCard title="💡 Recommendations" items={insights.recommendations} color="green" />
-              )}
-            </div>
-
-            {/* File Analysis */}
+            {/* Files List */}
             {report.files && report.files.length > 0 && (
               <div className="mb-8">
-                <h2 className="text-2xl font-bold mb-4">📁 File Analysis</h2>
+                <h2 className="text-2xl font-bold mb-4">📄 Analyzed Files</h2>
                 <div className="space-y-4">
                   {report.files.map((file, index) => (
                     <FileCard key={index} file={file} />
@@ -273,151 +384,92 @@ export default function ResultsPage() {
                 </div>
               </div>
             )}
-
-            {!report.files && (
-              <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
-                <p className="text-slate-400">
-                  Detailed file analysis is not available for this excavation.
-                </p>
-              </div>
-            )}
           </>
         )}
-
-        {!report && job.status === 'completed' && (
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
-            <p className="text-slate-400">
-              Report is being generated. Please refresh in a moment.
-            </p>
-          </div>
-        )}
-
-        <div className="mt-8 text-center">
-          <a
-            href="/excavate"
-            className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all"
-          >
-            ← Start New Excavation
-          </a>
-        </div>
       </div>
-    </main>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors = {
-    pending: 'bg-yellow-500',
-    processing: 'bg-blue-500 animate-pulse',
-    running: 'bg-blue-500 animate-pulse',
-    completed: 'bg-green-500',
-    failed: 'bg-red-500',
-  };
-
-  return (
-    <div className={`px-4 py-2 rounded-full ${colors[status as keyof typeof colors] || 'bg-gray-500'} text-white font-semibold`}>
-      {status.toUpperCase()}
     </div>
   );
 }
 
-function StatCard({ label, value, total }: { label: string; value: number | string; total?: number }) {
+// Component: Stat Card
+function StatCard({ label, value, icon }: { label: string; value: number | string; icon: string }) {
   return (
-    <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-      <p className="text-sm text-slate-400 mb-2">{label}</p>
-      <p className="text-3xl font-bold">
-        {value}
-        {total && <span className="text-lg text-slate-500">/{total}</span>}
-      </p>
+    <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+      <div className="text-2xl mb-1">{icon}</div>
+      <div className="text-2xl font-bold text-amber-400">{value}</div>
+      <div className="text-slate-400 text-sm">{label}</div>
     </div>
   );
 }
 
-function InsightCard({ title, items, color = 'purple' }: { title: string; items: string[]; color?: string }) {
-  const borderColors = {
-    red: 'border-red-500/30',
-    purple: 'border-purple-500/30',
-    green: 'border-green-500/30',
+// Component: Insight Card
+function InsightCard({ title, items, color }: { title: string; items: string[]; color: string }) {
+  const colorClasses: Record<string, string> = {
+    blue: 'border-blue-500/30 bg-blue-900/20',
+    orange: 'border-orange-500/30 bg-orange-900/20',
+    red: 'border-red-500/30 bg-red-900/20',
+    green: 'border-green-500/30 bg-green-900/20',
   };
-
-  const borderColor = borderColors[color as keyof typeof borderColors] || borderColors.purple;
-
+  
   return (
-    <div className={`bg-slate-800 rounded-lg p-6 border ${borderColor}`}>
-      <h3 className="text-lg font-semibold mb-4">{title}</h3>
+    <div className={`rounded-xl p-4 border ${colorClasses[color] || colorClasses.blue}`}>
+      <h3 className="font-semibold mb-3">{title}</h3>
       <ul className="space-y-2">
-        {items.slice(0, 10).map((item, index) => (
-          <li key={index} className="text-slate-300 text-sm">
-            • {item}
+        {items.slice(0, 5).map((item, index) => (
+          <li key={index} className="text-slate-300 text-sm flex items-start gap-2">
+            <span className="text-slate-500">•</span>
+            <span>{item}</span>
           </li>
         ))}
       </ul>
-      {items.length > 10 && (
-        <p className="text-xs text-slate-500 mt-2">
-          ... and {items.length - 10} more
-        </p>
-      )}
     </div>
   );
 }
 
-function FileCard({ file }: { file: NonNullable<Report["files"]>[number] }) {
+// Component: File Card
+function FileCard({ file }: { file: any }) {
   const [expanded, setExpanded] = useState(false);
-
+  
   return (
-    <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-purple-500/50 transition-all">
-      <div
-        className="flex items-start justify-between cursor-pointer"
+    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <button 
         onClick={() => setExpanded(!expanded)}
+        className="w-full p-4 text-left flex items-center justify-between hover:bg-slate-700/50 transition-colors"
       >
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-white mb-2">{file.path}</h3>
-          <div className="flex gap-4 text-sm text-slate-400">
-            <span>Language: {file.language}</span>
-            <span>Lines: {file.metrics.lines}</span>
-            <span>Complexity: {file.metrics.complexity}</span>
-            <span className={`font-semibold ${
-              file.metrics.maintainability > 70 ? 'text-green-400' :
-              file.metrics.maintainability > 40 ? 'text-yellow-400' : 'text-red-400'
-            }`}>
-              Maintainability: {file.metrics.maintainability}
-            </span>
-          </div>
+        <div className="flex items-center gap-3">
+          <span className="text-amber-400">📄</span>
+          <span className="font-mono text-sm">{file.path}</span>
+          <span className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-400">
+            {file.language}
+          </span>
         </div>
-        <button className="text-slate-400 hover:text-white">
-          {expanded ? '▼' : '▶'}
-        </button>
-      </div>
-
+        <div className="flex items-center gap-4 text-sm text-slate-400">
+          <span>{file.metrics?.lines || 0} lines</span>
+          <span className={file.metrics?.complexity > 20 ? 'text-red-400' : 'text-green-400'}>
+            Complexity: {file.metrics?.complexity || 0}
+          </span>
+          <span>{expanded ? '▲' : '▼'}</span>
+        </div>
+      </button>
+      
       {expanded && file.analysis && (
-        <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
-          <div>
-            <p className="text-sm font-semibold text-purple-400 mb-1">Summary</p>
-            <p className="text-slate-300">{file.analysis.summary}</p>
+        <div className="p-4 border-t border-slate-700 bg-slate-800/50">
+          <div className="mb-4">
+            <h4 className="text-amber-400 font-semibold mb-1">Summary</h4>
+            <p className="text-slate-300 text-sm">{file.analysis.summary}</p>
           </div>
-
-          <div>
-            <p className="text-sm font-semibold text-blue-400 mb-1">Business Context</p>
-            <p className="text-slate-300">{file.analysis.businessContext}</p>
-          </div>
-
-          {file.analysis.risks && file.analysis.risks.length > 0 && (
-            <div>
-              <p className="text-sm font-semibold text-red-400 mb-1">Risks</p>
-              <ul className="list-disc list-inside text-slate-300 text-sm space-y-1">
-                {file.analysis.risks.slice(0, 3).map((risk, i) => (
-                  <li key={i}>{risk}</li>
-                ))}
-              </ul>
+          {file.analysis.businessContext && (
+            <div className="mb-4">
+              <h4 className="text-blue-400 font-semibold mb-1">Business Context</h4>
+              <p className="text-slate-300 text-sm">{file.analysis.businessContext}</p>
             </div>
           )}
-
-          {file.analysis.recommendations && file.analysis.recommendations.length > 0 && (
+          {file.analysis.risks && file.analysis.risks.length > 0 && (
             <div>
-              <p className="text-sm font-semibold text-green-400 mb-1">Recommendations</p>
-              <ul className="list-disc list-inside text-slate-300 text-sm space-y-1">
-                {file.analysis.recommendations.slice(0, 3).map((rec, i) => (
-                  <li key={i}>{rec}</li>
+              <h4 className="text-red-400 font-semibold mb-1">Risks</h4>
+              <ul className="text-slate-300 text-sm list-disc list-inside">
+                {file.analysis.risks.map((risk: string, i: number) => (
+                  <li key={i}>{risk}</li>
                 ))}
               </ul>
             </div>

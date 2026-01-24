@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ExcavatorAgent } from '../agents/excavator.js';
 import { jobService } from '../services/job-service.js';
+import { vectorService } from '../services/vector-service.js';
 import { getKestraClient } from '../lib/kestra-client.js';
 import path from 'path';
 import fs from 'fs';
@@ -27,7 +28,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (useKestra) {
       console.log(`🎛️  Routing to Kestra (large job)`);
       const result = await kestraClient.triggerExcavation(job.id, inputPath, options.maxFiles);
-      
+
       if (result.success) {
         return res.json({
           success: true,
@@ -160,6 +161,18 @@ async function processExcavation(jobId: string, inputPath: string, options: any)
     });
 
     console.log(`✅ Job ${jobId.slice(-6)} completed`);
+
+    // NEW: Auto-embed results for semantic search
+    if (options.enableVectorSearch !== false) {
+      try {
+        console.log(`📊 Starting background embedding for job ${jobId.slice(-6)}...`);
+        vectorService.embedJobResults(jobId).catch(err => {
+          console.error(`Embedding failed for ${jobId}:`, err.message);
+        });
+      } catch (err: any) {
+        console.error('Failed to start embedding:', err.message);
+      }
+    }
 
   } catch (error: any) {
     await jobService.updateJob(jobId, {
