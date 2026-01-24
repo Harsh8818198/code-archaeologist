@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
 import { subscribeToJob, unsubscribeFromJob, isSupabaseAvailable } from '@/lib/supabase';
+import ChatInterface from '@/components/ChatInterface';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -200,6 +201,12 @@ export default function ResultsPage() {
           <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-400">Loading excavation...</p>
         </div>
+
+            {/* Chat Interface - Ask Questions About This Repository */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4">💬 Ask Questions</h2>
+              <ChatInterface jobId={jobId} />
+            </div>
       </div>
     );
   }
@@ -218,6 +225,12 @@ export default function ResultsPage() {
             Retry
           </button>
         </div>
+
+            {/* Chat Interface - Ask Questions About This Repository */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4">💬 Ask Questions</h2>
+              <ChatInterface jobId={jobId} />
+            </div>
       </div>
     );
   }
@@ -386,6 +399,12 @@ export default function ResultsPage() {
             )}
           </>
         )}
+
+            {/* Chat Interface - Ask Questions About This Repository */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4">💬 Ask Questions</h2>
+              <ChatInterface jobId={jobId} />
+            </div>
       </div>
     </div>
   );
@@ -478,4 +497,10 @@ function FileCard({ file }: { file: any }) {
       )}
     </div>
   );
+            {/* Chat Interface */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4">💬 Ask Questions</h2>
+              <ChatInterface jobId={jobId} />
+            </div>
+
 }
